@@ -41,6 +41,24 @@
         "更新历史"
     ];
 
+    const extraAdminOnlyButtonTexts = [
+        "\u7ba1\u7406\u5458\u5165\u53e3",
+        "\u5ba1\u6838\u4e2d\u5fc3",
+        "\u6570\u636e\u7ba1\u7406",
+        "\u91c7\u96c6\u7ba1\u7406",
+        "\u7ba1\u7406\u91c7\u96c6\u76ee\u6807",
+        "\u6570\u636e\u770b\u677f",
+        "\u5907\u4efd",
+        "\u5907\u4efd\u5bfc\u51fa",
+        "\u5907\u4efd\u5bfc\u5165",
+        "\u53cd\u9988\u7ba1\u7406",
+        "\u6e05\u7a7a\u5386\u53f2",
+        "\u5bfc\u5165\u5907\u4efd",
+        "\u5220\u9664",
+        "\u5f52\u6863",
+        "\u6062\u590d"
+    ];
+
     window.addEventListener("load", () => {
         rememberOriginalContainer();
         startPermissionGuard();
@@ -100,6 +118,11 @@
             const data = await response.json();
 
             if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.removeItem(TOKEN_KEY);
+                    notifyAuthChanged();
+                }
+
                 lastToken = null;
                 lastRole = "guest";
                 applyCurrentPermission();
@@ -183,12 +206,16 @@
 
         buttons.forEach(el => {
             const text = (el.innerText || "").trim();
+            const targetText = getElementTargetText(el);
 
-            if (!text) {
+            if (targetText.includes("history.html")) {
                 return;
             }
 
-            const isAdminButton = adminOnlyButtonTexts.some(keyword => text.includes(keyword));
+            const isAdminTarget = adminOnlyPages.some(page => targetText.includes(page));
+            const isAdminButton = isAdminTarget ||
+                adminOnlyButtonTexts.some(keyword => text.includes(keyword)) ||
+                extraAdminOnlyButtonTexts.some(keyword => text.includes(keyword));
 
             if (!isAdminButton) {
                 return;
@@ -204,6 +231,14 @@
                 el.dataset.adminGuardHidden = "true";
             }
         });
+    }
+
+    function getElementTargetText(el) {
+        return [
+            el.dataset ? (el.dataset.navTarget || "") : "",
+            el.getAttribute("href") || "",
+            el.getAttribute("onclick") || ""
+        ].join(" ").toLowerCase();
     }
 
     function removeAdminOnlyDynamicBlocks() {
@@ -240,11 +275,15 @@
             return;
         }
 
-        if (container.dataset.permissionBlocked === "true") {
+        if (
+            container.dataset.permissionBlocked === "true" &&
+            container.dataset.permissionRole === role
+        ) {
             return;
         }
 
         container.dataset.permissionBlocked = "true";
+        container.dataset.permissionRole = role;
 
         const roleText = role === "guest" ? "未登录用户" : "普通用户";
 
@@ -269,5 +308,13 @@
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;");
+    }
+
+    function notifyAuthChanged() {
+        try {
+            window.dispatchEvent(new CustomEvent("xgw-auth-changed"));
+        } catch (error) {
+            console.log("auth changed event failed", error);
+        }
     }
 })();

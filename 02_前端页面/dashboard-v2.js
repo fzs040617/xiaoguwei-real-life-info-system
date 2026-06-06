@@ -11,10 +11,10 @@ if (window.__DASHBOARD_V2_LOADED__) {
         setTimeout(loadDashboardV2WithPermission, 500);
     });
     async function loadDashboardV2WithPermission() {
-        const isAdmin = await checkDashboardAdminPermission();
+        const permissionRole = await checkDashboardAdminPermission();
 
-        if (!isAdmin) {
-            renderDashboardNoPermission();
+        if (permissionRole !== "admin") {
+            renderDashboardNoPermission(permissionRole);
             return;
         }
 
@@ -25,7 +25,7 @@ if (window.__DASHBOARD_V2_LOADED__) {
         const token = localStorage.getItem("xgw_user_token");
 
         if (!token) {
-            return false;
+            return "guest";
         }
 
         try {
@@ -40,23 +40,48 @@ if (window.__DASHBOARD_V2_LOADED__) {
             const data = await response.json();
 
             if (!response.ok) {
-                return false;
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.removeItem("xgw_user_token");
+                    notifyDashboardAuthChanged();
+                }
+
+                return "guest";
             }
 
-            return data.data && data.data.role === "admin";
+            const user = data.data || {};
+            return user.role === "admin" ? "admin" : "user";
 
         } catch (error) {
             console.log("数据看板权限检查失败", error);
-            return false;
+            return "guest";
         }
     }
 
-    function renderDashboardNoPermission() {
+    function renderDashboardNoPermission(role) {
         const container = document.querySelector(".container");
 
         if (!container) {
             return;
         }
+
+        const roleText = role === "user" ? "\u666e\u901a\u7528\u6237" : "\u672a\u767b\u5f55\u7528\u6237";
+        container.dataset.permissionBlocked = "true";
+        container.dataset.permissionRole = role || "guest";
+        container.innerHTML = `
+            <div class="box">
+                <h2>\u65e0\u6743\u9650\u8bbf\u95ee</h2>
+                <p class="notice">
+                    \u5f53\u524d\u8eab\u4efd\u662f\uff1a${roleText}\u3002
+                    \u8be5\u9875\u9762\u5c5e\u4e8e\u7cfb\u7edf\u7ba1\u7406\u529f\u80fd\uff0c\u4ec5\u7ba1\u7406\u5458\u53ef\u4ee5\u67e5\u770b\u548c\u64cd\u4f5c\u3002
+                </p>
+
+                <div class="action-row">
+                    <button onclick="location.href='index.html'">\u8fd4\u56de\u9996\u9875</button>
+                    <button onclick="openLoginModal()">\u767b\u5f55\u7ba1\u7406\u5458\u8d26\u53f7</button>
+                </div>
+            </div>
+        `;
+        return;
 
         container.innerHTML = `
             <div class="box">
@@ -71,6 +96,14 @@ if (window.__DASHBOARD_V2_LOADED__) {
                 </div>
             </div>
         `;
+    }
+
+    function notifyDashboardAuthChanged() {
+        try {
+            window.dispatchEvent(new CustomEvent("xgw-auth-changed"));
+        } catch (error) {
+            console.log("dashboard auth changed event failed", error);
+        }
     }
 
     async function loadDashboardV2() {
