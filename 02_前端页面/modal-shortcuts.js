@@ -1,26 +1,50 @@
 // modal-shortcuts.js
-// 弹窗快捷键 V3：
+// 弹窗快捷键 V7：
 // Enter：确定
 // Y：确定
 // N：取消
 // ArrowUp / ArrowDown：当焦点在 select 或 radio 上时切换选项
+// 表单字段导航：单行 input 可用 ArrowUp / ArrowDown 切换字段，textarea 使用 Ctrl/Alt + Arrow。
 // 重要修复：当焦点在 input / textarea / select 里时，Y 和 N 只是正常输入字符，不触发快捷键。
 // 这样账号或密码里有 n / y 时，不会自动退出或提交。
 
 (function () {
-    if (window.__MODAL_SHORTCUTS_V3_LOADED__) {
+    if (window.__MODAL_SHORTCUTS_V7_LOADED__) {
         return;
     }
 
-    window.__MODAL_SHORTCUTS_V3_LOADED__ = true;
+    window.__MODAL_SHORTCUTS_V7_LOADED__ = true;
+
+    document.addEventListener("focusin", function (event) {
+        if (event.target && event.target.tagName === "SELECT") {
+            delete event.target.dataset.xgwSelectConfirmed;
+            delete event.target.dataset.xgwSelectPickerTried;
+        }
+    });
+
+    document.addEventListener("blur", function (event) {
+        if (event.target && event.target.tagName === "SELECT") {
+            clearSelectStateAfterBlur(event.target);
+        }
+    }, true);
+
+    document.addEventListener("change", function (event) {
+        if (event.target && event.target.tagName === "SELECT") {
+            markSelectConfirmed(event.target);
+        }
+    }, true);
 
     window.addEventListener("keydown", function (event) {
         if (event.isComposing) {
             return;
         }
 
+        if (event.key === "Enter" && confirmSelectChoice(event)) {
+            return;
+        }
+
         if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-            if (handleOptionArrowKey(event)) {
+            if (handleArrowNavigation(event)) {
                 return;
             }
         }
@@ -89,16 +113,33 @@
         return false;
     }
 
-    function handleOptionArrowKey(event) {
+    function confirmSelectChoice(event) {
         const target = event.target;
 
-        if (!target) {
+        if (!target || target.tagName !== "SELECT") {
+            return false;
+        }
+
+        markSelectConfirmed(target);
+        consumeKeyboardEvent(event);
+
+        return true;
+    }
+
+    function handleArrowNavigation(event) {
+        const target = event.target;
+
+        if (!target || !isFormFieldTarget(target)) {
             return false;
         }
 
         const delta = event.key === "ArrowDown" ? 1 : -1;
 
         if (target.tagName === "SELECT") {
+            if (target.dataset.xgwSelectConfirmed === "1") {
+                return focusAdjacentField(target, delta, event, true);
+            }
+
             return moveSelectOption(target, delta, event);
         }
 
@@ -109,7 +150,30 @@
             return moveRadioOption(target, delta, event);
         }
 
+        if (target.tagName === "TEXTAREA") {
+            if (event.ctrlKey || event.altKey) {
+                return focusAdjacentField(target, delta, event);
+            }
+
+            return handleTextareaBoundaryNavigation(target, delta, event);
+        }
+
+        if (isSingleLineInput(target) || isCheckableInput(target)) {
+            return focusAdjacentField(target, delta, event);
+        }
+
         return false;
+    }
+
+    function clearSelectStateAfterBlur(select) {
+        window.setTimeout(function () {
+            if (document.activeElement === select) {
+                return;
+            }
+
+            delete select.dataset.xgwSelectConfirmed;
+            delete select.dataset.xgwSelectPickerTried;
+        }, 0);
     }
 
     function moveSelectOption(select, delta, event) {
@@ -117,18 +181,69 @@
             return false;
         }
 
+        const pickerOpened = tryOpenSelectPicker(select);
+        consumeKeyboardEvent(event);
+
+        if (pickerOpened) {
+            return true;
+        }
+
         const currentIndex = select.selectedIndex < 0 ? 0 : select.selectedIndex;
         const nextIndex = Math.max(0, Math.min(select.options.length - 1, currentIndex + delta));
 
         if (nextIndex === currentIndex) {
-            return false;
+            return true;
         }
 
-        event.preventDefault();
         select.selectedIndex = nextIndex;
         select.dispatchEvent(new Event("change", {bubbles: true}));
 
         return true;
+    }
+
+    function tryOpenSelectPicker(select) {
+        if (select.dataset.xgwSelectPickerTried === "1") {
+            return false;
+        }
+
+        select.dataset.xgwSelectPickerTried = "1";
+
+        try {
+            if (typeof select.showPicker === "function") {
+                select.showPicker();
+                return true;
+            }
+        } catch (error) {
+            console.log("select picker open is not supported in this browser", error);
+        }
+
+        try {
+            select.click();
+        } catch (error) {
+            console.log("select click open is not supported in this browser", error);
+        }
+
+        return false;
+    }
+
+    function markSelectConfirmed(select) {
+        select.dataset.xgwSelectConfirmed = "1";
+    }
+
+    function handleTextareaBoundaryNavigation(textarea, delta, event) {
+        if (textarea.selectionStart !== textarea.selectionEnd) {
+            return false;
+        }
+
+        const cursor = textarea.selectionStart;
+        const isAtStart = cursor === 0;
+        const isAtEnd = cursor === textarea.value.length;
+
+        if ((delta < 0 && isAtStart) || (delta > 0 && isAtEnd)) {
+            return focusAdjacentField(textarea, delta, event);
+        }
+
+        return false;
     }
 
     function moveRadioOption(radio, delta, event) {
@@ -143,15 +258,16 @@
             return false;
         }
 
+        event.preventDefault();
+
         const nextIndex = Math.max(0, Math.min(radios.length - 1, currentIndex + delta));
 
         if (nextIndex === currentIndex) {
-            return false;
+            return true;
         }
 
         const nextRadio = radios[nextIndex];
 
-        event.preventDefault();
         nextRadio.checked = true;
         nextRadio.focus();
         nextRadio.dispatchEvent(new Event("change", {bubbles: true}));
@@ -174,6 +290,125 @@
 
             return item.form === radio.form;
         });
+    }
+
+    function focusAdjacentField(current, delta, event, stopPropagation) {
+        if (stopPropagation) {
+            consumeKeyboardEvent(event);
+        }
+
+        const fields = getNavigableFields();
+        const currentIndex = fields.indexOf(current);
+
+        if (currentIndex < 0) {
+            return Boolean(stopPropagation);
+        }
+
+        const nextIndex = Math.max(0, Math.min(fields.length - 1, currentIndex + delta));
+
+        if (nextIndex === currentIndex) {
+            consumeKeyboardEvent(event);
+            return true;
+        }
+
+        const nextField = fields[nextIndex];
+
+        consumeKeyboardEvent(event);
+        nextField.focus();
+
+        if (isSingleLineInput(nextField)) {
+            nextField.select();
+        }
+
+        return true;
+    }
+
+    function consumeKeyboardEvent(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (typeof event.stopImmediatePropagation === "function") {
+            event.stopImmediatePropagation();
+        }
+    }
+
+    function getNavigableFields() {
+        const selector = [
+            'input:not([type="hidden"])',
+            "select",
+            "textarea"
+        ].join(",");
+
+        return Array.from(document.querySelectorAll(selector)).filter(isNavigableField);
+    }
+
+    function isNavigableField(element) {
+        if (!isFormFieldTarget(element)) {
+            return false;
+        }
+
+        if (element.disabled || element.readOnly) {
+            return false;
+        }
+
+        if (element.closest("[hidden], [aria-hidden='true']")) {
+            return false;
+        }
+
+        if (element.closest(".user-modal-mask[style*='display: none']")) {
+            return false;
+        }
+
+        if (!isVisibleElement(element)) {
+            return false;
+        }
+
+        if (element.tagName === "INPUT") {
+            const type = String(element.type || "text").toLowerCase();
+            return !["button", "submit", "reset", "hidden", "file", "image"].includes(type);
+        }
+
+        return element.tagName === "SELECT" || element.tagName === "TEXTAREA";
+    }
+
+    function isFormFieldTarget(target) {
+        if (!target || !target.tagName) {
+            return false;
+        }
+
+        return ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName);
+    }
+
+    function isSingleLineInput(element) {
+        if (!element || element.tagName !== "INPUT") {
+            return false;
+        }
+
+        const type = String(element.type || "text").toLowerCase();
+
+        return ["text", "url", "number", "date", "password", "search", "email", "tel"].includes(type);
+    }
+
+    function isCheckableInput(element) {
+        if (!element || element.tagName !== "INPUT") {
+            return false;
+        }
+
+        const type = String(element.type || "").toLowerCase();
+
+        return type === "checkbox";
+    }
+
+    function isVisibleElement(element) {
+        const rects = element.getClientRects();
+
+        if (!rects || rects.length === 0) {
+            return false;
+        }
+
+        const style = window.getComputedStyle(element);
+
+        return style.display !== "none" && style.visibility !== "hidden";
     }
 
     function findTopVisibleModal() {
