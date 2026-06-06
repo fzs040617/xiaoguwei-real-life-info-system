@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>采集目标管理｜小谷围岛广州大学城真实生活信息共建系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body onload="loadCrawlerTargets()">
+
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <h1>采集目标管理</h1>
+            <p>配置每天早上 9 点自动采集的公开网页目标</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-button" onclick="location.href='index.html'">返回首页</button>
+            <button class="header-button" onclick="location.href='submit.html'">提交一条线索</button>
+            <button class="header-button" onclick="location.href='admin.html'">审核中心</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="box">
+        <p class="notice">
+            第一版只采集公开网页，不处理登录、验证码、私密内容。新增采集目标后，可以点击“立即执行采集”测试。
+        </p>
+
+        <div class="form-row">
+            <label>采集网址</label>
+            <input id="targetUrl" placeholder="例如：https://www.iana.org/domains/reserved">
+        </div>
+
+        <div class="form-row">
+            <label>分类</label>
+            <select id="targetCategory">
+                <option value="外部线索">外部线索</option>
+                <option value="探店">探店</option>
+                <option value="租房">租房</option>
+                <option value="地图">地图</option>
+                <option value="路线">路线</option>
+                <option value="生活服务">生活服务</option>
+                <option value="避坑纠错">避坑纠错</option>
+                <option value="测试线索">测试线索</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>来源平台</label>
+            <input id="targetPlatform" placeholder="例如：公开网页、公众号、大学城公开信息页">
+        </div>
+
+        <div class="form-row">
+            <label>备注</label>
+            <textarea id="targetNote" placeholder="例如：大学城美食相关、租房线索来源等"></textarea>
+        </div>
+
+        <button onclick="submitCrawlTarget()">新增采集目标</button>
+        <button style="margin-left: 8px;" onclick="runCrawlerNow()">立即执行采集</button>
+
+        <div id="targetMessage" class="message"></div>
+        <div id="crawlResultBox" class="crawl-result-box" style="display:none;"></div>
+    </div>
+
+    <div class="section">
+        <h2>当前采集目标</h2>
+        <div id="targetList" class="empty">正在加载采集目标...</div>
+    </div>
+</div>
+
+<script src="app.js?v=9"></script>
+<script src="generic-smart-fill.js?v=8"></script>
+<script src="smart-progress.js?v=8"></script>
+<script src="generic-smart-fix.js?v=8"></script>
+<script src="submit-action-fix.js?v=10"></script>
+<script src="request-timeout-fix.js?v=8"></script>
+<script src="smart-edit-panel.js?v=10"></script>
+<script src="smart-edit-hook.js?v=10"></script>
+<script src="submit-success-reload.js?v=12"></script>
+<script src="smart-form-mode.js?v=14"></script>
+<script src="smart-progress-cleanup.js?v=15"></script>
+<script src="history-auto.js?v=19"></script>
+<script src="global-loader.js?v=53"></script>
+</body>
+</html>

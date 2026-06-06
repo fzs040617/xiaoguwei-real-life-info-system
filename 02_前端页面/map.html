@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>地图中心｜小谷围岛广州大学城真实生活信息共建系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body onload="loadMapPoints()">
+
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <h1>地图中心</h1>
+            <p>美食地图、租房地图、生活服务地图、游玩路线地点管理</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-button" onclick="location.href='index.html'">返回首页</button>
+            <button class="header-button" onclick="location.href='submit.html'">提交线索</button>
+            <button class="header-button" onclick="location.href='admin.html'">审核中心</button>
+            <button class="header-button" onclick="location.href='manage.html'">数据管理</button>
+            <button class="header-button" onclick="location.href='dashboard.html'">数据看板</button>
+            <button class="header-button" onclick="location.href='feedback-admin.html'">反馈中心</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="box">
+        <h2>智能识别添加地图点</h2>
+        <p class="notice">
+            可以直接粘贴一段“字段：内容”的信息，系统会自动识别并填入下方表单。请先检查识别结果，再点击“确认同步到系统”。
+        </p>
+
+        <div class="form-row">
+            <label>粘贴地点信息</label>
+            <textarea id="mapSmartInput" placeholder="例如：
+    地点名称：广大附近打印店
+    分类：生活服务
+    地址/区域：广州大学城广大附近
+    地图类型：生活地点
+    来源：手动测试
+    说明：测试地图中心新增地点"></textarea>
+        </div>
+
+        <button onclick="parseMapSmartText()">智能识别填表</button>
+        <button id="mapSmartConfirmBtn" style="margin-left: 8px; display:none;" onclick="confirmMapSmartSubmit()">确认同步到系统</button>
+        <button style="margin-left: 8px;" onclick="clearMapSmartInput()">清空</button>
+
+        <div id="mapSmartPreview" class="crawl-result-box" style="margin-top: 14px;"></div>
+    </div>
+    <div class="box">
+        <h2>新增地图点</h2>
+        <p class="notice">
+            第一版先做“地点信息管理 + 外部地图跳转”。后面可以继续接入真实地图组件，做美食地图、租房地图、citywalk 路线。
+        </p>
+
+        <div class="form-row">
+            <label>地点名称</label>
+            <input id="mapName" placeholder="例如：贝岗某烧烤店、广大附近打印店、大学城南租房点">
+        </div>
+
+        <div class="form-row">
+            <label>分类</label>
+            <select id="mapCategory">
+                <option value="探店">探店</option>
+                <option value="租房">租房</option>
+                <option value="地图">地图</option>
+                <option value="路线">路线</option>
+                <option value="生活服务">生活服务</option>
+                <option value="避坑纠错">避坑纠错</option>
+                <option value="外部线索">外部线索</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>地址/区域</label>
+            <input id="mapAddress" placeholder="例如：贝岗村、广大商业中心、大学城南地铁站附近">
+        </div>
+
+        <div class="form-row">
+            <label>纬度，可为空</label>
+            <input id="mapLatitude" placeholder="例如：23.050000">
+        </div>
+
+        <div class="form-row">
+            <label>经度，可为空</label>
+            <input id="mapLongitude" placeholder="例如：113.400000">
+        </div>
+
+        <div class="form-row">
+            <label>地图类型</label>
+            <select id="mapType">
+                <option value="生活地点">生活地点</option>
+                <option value="美食地图">美食地图</option>
+                <option value="租房地图">租房地图</option>
+                <option value="游玩地图">游玩地图</option>
+                <option value="citywalk路线">citywalk路线</option>
+                <option value="避坑地图">避坑地图</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>关联对象类型，可为空</label>
+            <select id="mapTargetType">
+                <option value="">不关联</option>
+                <option value="clue">关联线索</option>
+                <option value="verified">关联真实库</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>关联对象 ID，可为空</label>
+            <input id="mapTargetId" placeholder="例如：线索ID或真实库ID">
+        </div>
+
+        <div class="form-row">
+            <label>来源</label>
+            <input id="mapSource" placeholder="例如：手动添加、用户投稿、管理员整理">
+        </div>
+
+        <div class="form-row">
+            <label>说明</label>
+            <textarea id="mapDescription" placeholder="例如：适合夜宵 / 租房价格偏高 / 路线起点 / 需要进一步核验"></textarea>
+        </div>
+
+        <button onclick="createMapPoint()">新增地图点</button>
+        <div id="mapMessage" class="message"></div>
+    </div>
+
+    <div class="box">
+        <h2>地图点筛选</h2>
+
+        <div class="search-box">
+            <input id="mapKeyword" placeholder="搜索地点名、地址、说明、来源" onkeydown="handleMapSearchKeyDown(event)">
+            <button onclick="loadMapPoints()">搜索</button>
+        </div>
+
+        <div class="category-row">
+            <button id="mapCat全部" class="category-button active" onclick="setMapCategory('全部')">全部</button>
+            <button id="mapCat探店" class="category-button" onclick="setMapCategory('探店')">探店</button>
+            <button id="mapCat租房" class="category-button" onclick="setMapCategory('租房')">租房</button>
+            <button id="mapCat地图" class="category-button" onclick="setMapCategory('地图')">地图</button>
+            <button id="mapCat路线" class="category-button" onclick="setMapCategory('路线')">路线</button>
+            <button id="mapCat生活服务" class="category-button" onclick="setMapCategory('生活服务')">生活服务</button>
+            <button id="mapCat避坑纠错" class="category-button" onclick="setMapCategory('避坑纠错')">避坑纠错</button>
+            <button id="mapCat外部线索" class="category-button" onclick="setMapCategory('外部线索')">外部线索</button>
+        </div>
+
+        <div style="margin-top: 12px;">
+            <button id="mapStatus正常" class="small-button filter-button active" onclick="setMapStatus('正常')">正常</button>
+            <button id="mapStatus已归档" class="small-button filter-button" onclick="setMapStatus('已归档')">已归档</button>
+            <button id="mapStatus全部" class="small-button filter-button" onclick="setMapStatus('全部')">全部状态</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>地图点列表</h2>
+        <div id="mapPointList" class="empty">正在加载地图点...</div>
+    </div>
+
+</div>
+
+<script src="map.js?v=9"></script>
+<script src="smart-core.js?v=8"></script>
+<script src="map-smart-fill.js?v=8"></script>
+<script src="smart-progress.js?v=8"></script>
+<script src="submit-action-fix.js?v=10"></script>
+<script src="request-timeout-fix.js?v=8"></script>
+<script src="smart-edit-panel.js?v=10"></script>
+<script src="smart-edit-hook.js?v=10"></script>
+<script src="submit-success-reload.js?v=12"></script>
+<script src="smart-form-mode.js?v=14"></script>
+<script src="smart-progress-cleanup.js?v=15"></script>
+<script src="history-auto.js?v=19"></script>
+<script src="history-badge.js?v=17"></script>
+<script src="map-route-detail-link.js?v=20"></script>
+<script src="global-loader.js?v=53"></script>
+</body>
+</html>

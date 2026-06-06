@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>路线中心｜小谷围岛广州大学城真实生活信息共建系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body onload="loadRoutePage()">
+
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <h1>路线中心</h1>
+            <p>把地图点串成 citywalk、美食路线、租房看房路线和生活服务路线</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-button" onclick="location.href='index.html'">返回首页</button>
+            <button class="header-button" onclick="location.href='map.html'">地图中心</button>
+            <button class="header-button" onclick="location.href='admin.html'">审核中心</button>
+            <button class="header-button" onclick="location.href='manage.html'">数据管理</button>
+            <button class="header-button" onclick="location.href='dashboard.html'">数据看板</button>
+            <button class="header-button" onclick="location.href='feedback-admin.html'">反馈中心</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="box">
+        <h2>新建路线</h2>
+        <p class="notice">
+            可以先在下面“可选地图点”中点击“加入路线草稿”，也可以手动填写地图点 ID，例如：1,2,3。
+        </p>
+
+        <div class="form-row">
+            <label>路线名称</label>
+            <input id="routeName" placeholder="例如：广大附近生活服务路线、贝岗夜宵路线、大学城南看房路线">
+        </div>
+
+        <div class="form-row">
+            <label>路线类型</label>
+            <select id="routeType">
+                <option value="citywalk路线">citywalk路线</option>
+                <option value="美食路线">美食路线</option>
+                <option value="租房看房路线">租房看房路线</option>
+                <option value="生活服务路线">生活服务路线</option>
+                <option value="避坑路线">避坑路线</option>
+                <option value="其他路线">其他路线</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>分类</label>
+            <select id="routeCategory">
+                <option value="路线">路线</option>
+                <option value="探店">探店</option>
+                <option value="租房">租房</option>
+                <option value="生活服务">生活服务</option>
+                <option value="避坑纠错">避坑纠错</option>
+                <option value="地图">地图</option>
+                <option value="外部线索">外部线索</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>起点/区域</label>
+            <input id="routeStartArea" placeholder="例如：大学城南地铁站、广大商业中心、贝岗村">
+        </div>
+
+        <div class="form-row">
+            <label>地图点 ID，用英文逗号分隔</label>
+            <input id="routePointIds" placeholder="例如：1,2,3">
+        </div>
+
+        <div class="form-row">
+            <label>来源</label>
+            <input id="routeSource" placeholder="例如：手动整理、用户投稿、管理员整理">
+        </div>
+
+        <div class="form-row">
+            <label>路线说明</label>
+            <textarea id="routeDescription" placeholder="例如：适合晚上从大学城南出发，先打印资料，再吃夜宵，最后回宿舍。"></textarea>
+        </div>
+
+        <button onclick="createRoute()">新建路线</button>
+        <button style="margin-left: 8px;" onclick="clearRouteDraft()">清空草稿</button>
+
+        <div id="routeMessage" class="message"></div>
+    </div>
+
+    <div class="box">
+        <h2>可选地图点</h2>
+        <p class="notice">
+            这里显示正常状态的地图点。点击“加入路线草稿”后，会自动加入上方地图点 ID 输入框。
+        </p>
+
+        <div class="search-box">
+            <input id="routeMapKeyword" placeholder="搜索地图点：广大、贝岗、打印店、租房" onkeydown="handleRouteMapSearchKeyDown(event)">
+            <button onclick="loadSelectableMapPoints()">搜索地图点</button>
+        </div>
+
+        <div id="selectableMapPointList" class="empty">正在加载地图点...</div>
+    </div>
+
+    <div class="box">
+        <h2>路线筛选</h2>
+
+        <div class="search-box">
+            <input id="routeKeyword" placeholder="搜索路线名称、说明、来源" onkeydown="handleRouteSearchKeyDown(event)">
+            <button onclick="loadRoutes()">搜索路线</button>
+        </div>
+
+        <div class="category-row">
+            <button id="routeType全部" class="category-button active" onclick="setRouteType('全部')">全部</button>
+            <button id="routeTypecitywalk路线" class="category-button" onclick="setRouteType('citywalk路线')">citywalk</button>
+            <button id="routeType美食路线" class="category-button" onclick="setRouteType('美食路线')">美食路线</button>
+            <button id="routeType租房看房路线" class="category-button" onclick="setRouteType('租房看房路线')">看房路线</button>
+            <button id="routeType生活服务路线" class="category-button" onclick="setRouteType('生活服务路线')">生活服务</button>
+            <button id="routeType避坑路线" class="category-button" onclick="setRouteType('避坑路线')">避坑路线</button>
+        </div>
+
+        <div style="margin-top: 12px;">
+            <button id="routeStatus正常" class="small-button filter-button active" onclick="setRouteStatus('正常')">正常</button>
+            <button id="routeStatus已归档" class="small-button filter-button" onclick="setRouteStatus('已归档')">已归档</button>
+            <button id="routeStatus全部" class="small-button filter-button" onclick="setRouteStatus('全部')">全部状态</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>路线列表</h2>
+        <div id="routeList" class="empty">正在加载路线...</div>
+    </div>
+
+</div>
+
+<script src="route.js?v=10"></script>
+<script src="route-smart-fill.js?v=9"></script>
+<script src="smart-progress.js?v=9"></script>
+<script src="route-smart-fix.js?v=9"></script>
+<script src="submit-action-fix.js?v=10"></script>
+<script src="request-timeout-fix.js?v=9"></script>
+<script src="route-load-fix.js?v=9"></script>
+<script src="smart-edit-panel.js?v=10"></script>
+<script src="smart-edit-hook.js?v=10"></script>
+<script src="submit-success-reload.js?v=12"></script>
+<script src="route-ui-refactor.js?v=13"></script>
+<script src="smart-form-mode.js?v=14"></script>
+<script src="smart-progress-cleanup.js?v=15"></script>
+<script src="history-auto.js?v=19"></script>
+<script src="history-badge.js?v=17"></script>
+<script src="map-route-detail-link.js?v=20"></script>
+<script src="global-loader.js?v=53"></script>
+</body>
+</html>

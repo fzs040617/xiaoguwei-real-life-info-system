@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>提交线索｜小谷围岛广州大学城真实生活信息共建系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <h1>提交一条线索</h1>
+            <p>用户投稿会先进入线索库，审核后才能进入真实库</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-button" onclick="location.href='index.html'">返回首页</button>
+            <button class="header-button" onclick="location.href='crawler.html'">管理采集目标</button>
+            <button class="header-button" onclick="location.href='admin.html'">审核中心</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="box">
+        <p class="notice">
+            提交后会先进入“线索库”，不会直接进入真实库。后续需要经过用户核验和管理员审核后，才会同步到真实库。
+        </p>
+
+        <div class="form-row">
+            <label>标题</label>
+            <input id="clueTitle" placeholder="例如：贝岗某家夜宵烧烤线索">
+        </div>
+
+        <div class="form-row">
+            <label>分类</label>
+            <select id="clueCategory">
+                <option value="探店">探店</option>
+                <option value="租房">租房</option>
+                <option value="地图">地图</option>
+                <option value="路线">路线</option>
+                <option value="生活服务">生活服务</option>
+                <option value="避坑纠错">避坑纠错</option>
+                <option value="外部线索">外部线索</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>来源平台</label>
+            <input id="cluePlatform" placeholder="例如：用户投稿、小红书、公众号、公开网页">
+        </div>
+
+        <div class="form-row">
+            <label>来源链接</label>
+            <input id="clueUrl" placeholder="可以为空，例如：https://example.com">
+        </div>
+
+        <div class="form-row">
+            <label>线索简介</label>
+            <textarea id="clueSummary" placeholder="请描述这条线索的内容、位置、价格、体验、是否待核验等"></textarea>
+        </div>
+
+        <button onclick="submitClue()">提交线索</button>
+        <button style="margin-left: 8px;" onclick="location.href='index.html'">返回首页</button>
+
+        <div id="submitMessage" class="message"></div>
+    </div>
+</div>
+
+<script src="app.js?v=8"></script>
+<script src="generic-smart-fill.js?v=8"></script>
+<script src="smart-progress.js?v=8"></script>
+<script src="generic-smart-fix.js?v=8"></script>
+<script src="submit-action-fix.js?v=10"></script>
+<script src="request-timeout-fix.js?v=8"></script>
+<script src="smart-edit-panel.js?v=10"></script>
+<script src="smart-edit-hook.js?v=10"></script>
+<script src="submit-success-reload.js?v=12"></script>
+<script src="smart-form-mode.js?v=14"></script>
+<script src="smart-progress-cleanup.js?v=15"></script>
+<script src="history-auto.js?v=19"></script>
+<script src="global-loader.js?v=53"></script>
+</body>
+</html>

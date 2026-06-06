@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>备份导出｜小谷围岛广州大学城真实生活信息共建系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="xgw-backup-page" onload="loadBackupPreview()">
+
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <h1>备份导出</h1>
+            <p>导出系统当前全部数据，方便后续迁移数据库、备份恢复和版本留档</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-button" onclick="location.href='index.html'">返回首页</button>
+            <button class="header-button" onclick="location.href='dashboard.html'">数据看板</button>
+            <button class="header-button" onclick="location.href='history.html'">更新历史</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="box">
+        <h2>系统备份说明</h2>
+        <p class="notice">
+            备份导出会把线索、真实库、采集目标、反馈、地图点、路线、更新历史全部导出为一个 JSON 文件。
+            这个操作不会修改系统数据，也不会清空任何内容。
+        </p>
+
+        <button onclick="downloadBackupJson()">导出完整 JSON 备份</button>
+        <button style="margin-left:8px;" onclick="loadBackupPreview()">刷新备份预览</button>
+
+        <div id="backupMessage" class="message"></div>
+    </div>
+
+    <div id="backupImportMount"></div>
+
+    <div class="section">
+        <h2>备份数据预览</h2>
+        <div id="backupPreview" class="empty">正在加载备份预览...</div>
+    </div>
+
+    <div class="section">
+        <h2>最近一次导出内容结构</h2>
+        <div id="backupStructure" class="empty">暂无导出结构。</div>
+    </div>
+
+</div>
+
+<script src="backup.js?v=32"></script>
+<script src="backup-import.js?v=51"></script>
+<script src="backup-import-layout.js?v=50"></script>
+<script src="global-loader.js?v=53"></script>
+</body>
+</html>

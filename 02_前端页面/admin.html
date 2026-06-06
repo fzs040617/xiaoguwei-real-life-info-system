@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>审核中心｜小谷围岛广州大学城真实生活信息共建系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body onload="loadHomeData()">
+
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <h1>管理员审核中心</h1>
+            <p>集中处理线索核验、管理员审核、同步真实库</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-button" onclick="location.href='index.html'">返回首页</button>
+            <button class="header-button" onclick="location.href='submit.html'">提交线索</button>
+            <button class="header-button" onclick="location.href='crawler.html'">采集管理</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="box">
+        <h2>审核说明</h2>
+        <p class="notice">
+            这里主要用于管理员集中处理线索。普通用户可以先进行“属实/不准确/已过期”的核验；
+            管理员确认后点击“审核通过，同步到真实库”。
+        </p>
+    </div>
+
+    <div class="box">
+        <h2>搜索待审核线索</h2>
+        <div class="search-box">
+            <input id="keywordInput" placeholder="搜索：贝岗、夜宵、租房、打印店、测试线索" onkeydown="handleSearchKeyDown(event)">
+            <button onclick="search()">搜索</button>
+        </div>
+        <p style="color:#666;">不输入关键词时，默认显示最近线索。</p>
+    </div>
+
+    <div class="section">
+        <h2>真实库参考</h2>
+        <div id="verifiedResults" class="empty">正在加载真实库内容...</div>
+    </div>
+
+    <div class="section">
+        <h2>线索审核列表</h2>
+
+        <div style="margin-bottom: 14px;">
+            <button id="filterPending" class="small-button filter-button active" onclick="setClueFilter('pending')">只看待核验</button>
+            <button id="filterApproved" class="small-button filter-button" onclick="setClueFilter('approved')">只看已转入真实库</button>
+            <button id="filterAll" class="small-button filter-button" onclick="setClueFilter('all')">查看全部线索</button>
+        </div>
+
+        <div id="clueFilterNotice" class="empty">当前筛选：只看待核验</div>
+        <div id="clueResults" class="empty">正在加载线索库内容...</div>
+    </div>
+
+</div>
+
+<script src="app.js?v=9"></script>
+<script src="archive-filter.js"></script>
+<script src="detail-link.js"></script>
+<script src="history-auto.js?v=19"></script>
+<script src="history-badge.js?v=17"></script>
+<script src="global-loader.js?v=53"></script>
+</body>
+</html>

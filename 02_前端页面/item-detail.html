@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>真实库详情｜小谷围岛广州大学城真实生活信息共建系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body onload="loadVerifiedDetail(); loadFeedback('verified')">
+
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <h1>真实库详情</h1>
+            <p>查看已核验信息详情，并进行反馈补充、归档、恢复或删除</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-button" onclick="location.href='index.html'">返回首页</button>
+            <button class="header-button" onclick="location.href='admin.html'">审核中心</button>
+            <button class="header-button" onclick="location.href='manage.html'">数据管理</button>
+            <button class="header-button" onclick="location.href='dashboard.html'">数据看板</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div id="detailBox" class="empty">正在加载真实库详情...</div>
+
+    <div class="box">
+        <h2>用户反馈与补充</h2>
+        <p class="notice">
+            即使已经进入真实库，用户也可以继续补充价格变化、营业状态、体验变化、纠错信息等。
+        </p>
+
+        <div class="form-row">
+            <label>昵称</label>
+            <input id="feedbackUserName" placeholder="可留空，默认匿名用户">
+        </div>
+
+        <div class="form-row">
+            <label>反馈类型</label>
+            <select id="feedbackType">
+                <option value="补充信息">补充信息</option>
+                <option value="真实反馈">真实反馈</option>
+                <option value="纠错">纠错</option>
+                <option value="已过期">已过期</option>
+                <option value="价格信息">价格信息</option>
+                <option value="其他">其他</option>
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label>反馈内容</label>
+            <textarea id="feedbackContent" placeholder="例如：价格变了 / 现在不开门 / 我今天去过，信息仍然属实"></textarea>
+        </div>
+
+        <button onclick="submitFeedback('verified')">提交反馈</button>
+        <div id="feedbackMessage" class="message"></div>
+    </div>
+
+    <div class="section">
+        <h2>已有反馈</h2>
+        <div id="feedbackList" class="empty">正在加载反馈...</div>
+    </div>
+</div>
+
+<script src="detail.js?v=9"></script>
+<script src="feedback.js?v=9"></script>
+<script src="generic-smart-fill.js?v=8"></script>
+<script src="smart-progress.js?v=8"></script>
+<script src="generic-smart-fix.js?v=8"></script>
+<script src="submit-action-fix.js?v=10"></script>
+<script src="request-timeout-fix.js?v=8"></script>
+<script src="smart-edit-panel.js?v=10"></script>
+<script src="smart-edit-hook.js?v=10"></script>
+<script src="submit-success-reload.js?v=12"></script>
+<script src="smart-form-mode.js?v=14"></script>
+<script src="smart-progress-cleanup.js?v=15"></script>
+<script src="history-auto.js?v=19"></script>
+<script src="history-badge.js?v=17"></script>
+<script src="history-inline.js?v=18"></script>
+<script src="clue-item-detail-edit.js?v=23"></script>
+<script src="feedback-history-link.js?v=26"></script>
+<script src="global-loader.js?v=53"></script>
+</body>
+</html>

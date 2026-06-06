@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>小谷围岛广州大学城真实生活信息共建系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body onload="loadHomeData()">
+
+<div class="header">
+    <div class="header-inner">
+        <div>
+            <h1>小谷围岛广州大学城真实生活信息共建系统</h1>
+            <p>真实库 + 线索库 + 用户核验 + 自动采集 + 管理员审核</p>
+        </div>
+        <div class="header-actions">
+            <button class="header-button" onclick="location.href='submit.html'">提交一条线索</button>
+            <button class="header-button" onclick="location.href='crawler.html'">管理采集目标</button>
+            <button class="header-button" onclick="location.href='admin.html'">审核中心</button>
+            <button class="header-button" onclick="location.href='manage.html'">数据管理</button>
+            <button class="header-button" onclick="location.href='dashboard.html'">数据看板</button>
+            <button class="header-button" onclick="location.href='map.html'">地图中心</button>
+            <button class="header-button" onclick="location.href='route.html'">路线中心</button>
+            <button class="header-button" onclick="location.href='history.html'">更新历史</button>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+
+    <div class="box">
+        <h2>搜索大学城真实信息</h2>
+        <div class="search-box">
+            <input id="keywordInput" placeholder="搜索：贝岗、夜宵、租房、咖啡、测试线索" onkeydown="handleSearchKeyDown(event)">
+            <button onclick="search()">搜索</button>
+        </div>
+        <p style="color:#666;">提示：输入关键词后可以直接按 Enter 搜索。页面打开后会默认展示最近内容。</p>
+
+        <div class="category-row">
+            <button id="categoryAll" class="category-button active" onclick="setCategoryFilter('全部')">全部</button>
+            <button id="category探店" class="category-button" onclick="setCategoryFilter('探店')">探店</button>
+            <button id="category租房" class="category-button" onclick="setCategoryFilter('租房')">租房</button>
+            <button id="category地图" class="category-button" onclick="setCategoryFilter('地图')">地图</button>
+            <button id="category路线" class="category-button" onclick="setCategoryFilter('路线')">路线</button>
+            <button id="category生活服务" class="category-button" onclick="setCategoryFilter('生活服务')">生活服务</button>
+            <button id="category避坑纠错" class="category-button" onclick="setCategoryFilter('避坑纠错')">避坑纠错</button>
+            <button id="category外部线索" class="category-button" onclick="setCategoryFilter('外部线索')">外部线索</button>
+            <button class="header-button" onclick="location.href='backup.html'">备份导出</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>已核验真实库</h2>
+        <div id="verifiedResults" class="empty">正在加载真实库内容...</div>
+    </div>
+
+    <div class="section">
+        <h2>线索库</h2>
+
+        <div style="margin-bottom: 14px;">
+            <button id="filterPending" class="small-button filter-button active" onclick="setClueFilter('pending')">只看待核验</button>
+            <button id="filterApproved" class="small-button filter-button" onclick="setClueFilter('approved')">只看已转入真实库</button>
+            <button id="filterAll" class="small-button filter-button" onclick="setClueFilter('all')">查看全部线索</button>
+        </div>
+
+        <div id="clueFilterNotice" class="empty">当前筛选：只看待核验</div>
+        <div id="clueResults" class="empty">正在加载线索库内容...</div>
+    </div>
+
+</div>
+
+<script src="app.js"></script>
+<script src="archive-filter.js"></script>
+<script src="detail-link.js"></script>
+<script src="history-badge.js?v=17"></script>
+<script src="history-auto.js?v=19"></script>
+<script src="global-loader.js?v=53"></script>
+</body>
+</html>
