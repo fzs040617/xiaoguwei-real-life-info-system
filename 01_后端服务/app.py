@@ -2659,13 +2659,16 @@ def list_auth_users_admin(
         .limit(safe_limit)
         .all()
     )
+    safe_users = [admin_safe_user_data(user) for user in users]
 
     return {
         "message": "用户列表读取成功",
         "total": total,
+        "total_count": total,
         "limit": safe_limit,
         "offset": safe_offset,
-        "data": [admin_safe_user_data(user) for user in users]
+        "data": safe_users,
+        "items": safe_users
     }
 
 

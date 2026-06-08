@@ -385,9 +385,17 @@ button:hover {
 
 .user-admin-toolbar {
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) 180px auto auto;
+    grid-template-columns: minmax(220px, 1fr) 180px 150px auto auto;
     gap: 10px;
     align-items: center;
+}
+
+.user-admin-message {
+    min-height: 20px;
+}
+
+.user-admin-message-error {
+    color: #c0392b;
 }
 
 .user-admin-table-wrap {
@@ -423,9 +431,65 @@ button:hover {
     border-bottom: none;
 }
 
+.user-role-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.user-role-badge-admin {
+    background: #eaf2ff;
+    color: #1f5fc0;
+    border: 1px solid #b8cffb;
+}
+
+.user-role-badge-user {
+    background: #eef7f2;
+    color: #1f7a4d;
+    border: 1px solid #b9dcc9;
+}
+
+.user-admin-pagination {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.user-admin-page-info {
+    color: #555;
+    font-size: 14px;
+}
+
+.user-admin-empty,
+.user-admin-loading {
+    background: white;
+    border-radius: 8px;
+    padding: 18px;
+    border: 1px dashed #d8e3dd;
+}
+
+.user-role-detail {
+    background: #f7faf8;
+    border: 1px solid #dcece4;
+    border-radius: 8px;
+    padding: 14px;
+    line-height: 1.8;
+    margin-bottom: 16px;
+}
+
 @media (max-width: 900px) {
     .user-admin-toolbar {
         grid-template-columns: 1fr;
+    }
+
+    .user-admin-pagination {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
 

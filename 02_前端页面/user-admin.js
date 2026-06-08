@@ -1,5 +1,5 @@
 // user-admin.js
-// 管理员用户管理页第一期：查看、搜索、筛选用户，并在确认后修改用户角色。
+// 管理员用户管理页体验优化：分页、清晰状态提示、角色徽章和角色修改确认。
 
 const USER_ADMIN_API = "http://127.0.0.1:8000";
 const USER_ADMIN_TOKEN_KEY = "xgw_user_token";
@@ -7,12 +7,15 @@ const USER_ADMIN_TOKEN_KEY = "xgw_user_token";
 let userAdminCurrentUser = null;
 let userAdminUsers = [];
 let userRoleEditingUser = null;
+let userAdminPage = 1;
+let userAdminPageSize = 20;
+let userAdminTotal = 0;
 
 async function initUserAdminPage() {
     const token = getUserAdminToken();
 
     if (!token) {
-        renderUserAdminNoPermission("guest");
+        renderUserAdminNoPermission("guest", "未登录");
         return;
     }
 
@@ -25,20 +28,22 @@ async function initUserAdminPage() {
         const data = await response.json();
 
         if (!response.ok) {
-            renderUserAdminNoPermission("guest", data.detail || "登录状态无效或已过期");
+            renderUserAdminNoPermission("guest", data.detail || "token 失效，请重新登录");
             return;
         }
 
         userAdminCurrentUser = data.data || null;
 
         if (!userAdminCurrentUser || userAdminCurrentUser.role !== "admin") {
-            renderUserAdminNoPermission("user");
+            renderUserAdminNoPermission("user", "当前账号无权限访问用户管理");
             return;
         }
 
+        syncUserAdminPageSizeFromControl();
         await loadUserAdminList();
     } catch (error) {
-        setUserAdminMessage(`读取当前用户失败：${error.message}`, true);
+        setUserAdminMessage(`读取当前用户失败：${formatUserAdminNetworkError(error)}`, true);
+        renderUserAdminEmpty("网络错误，无法确认当前登录身份。");
     }
 }
 
@@ -46,16 +51,19 @@ async function loadUserAdminList() {
     const token = getUserAdminToken();
 
     if (!token) {
-        renderUserAdminNoPermission("guest");
+        renderUserAdminNoPermission("guest", "未登录");
         return;
     }
 
+    syncUserAdminPageSizeFromControl();
+
     const keyword = document.getElementById("userAdminKeyword")?.value.trim() || "";
     const role = document.getElementById("userAdminRoleFilter")?.value || "";
+    const offset = (userAdminPage - 1) * userAdminPageSize;
     const params = new URLSearchParams({
         token,
-        limit: "50",
-        offset: "0"
+        limit: String(userAdminPageSize),
+        offset: String(offset)
     });
 
     if (keyword) {
@@ -74,38 +82,73 @@ async function loadUserAdminList() {
         const data = await response.json();
 
         if (!response.ok) {
-            if (response.status === 401) {
-                renderUserAdminNoPermission("guest", data.detail || "请先登录管理员账号");
-                return;
-            }
-
-            if (response.status === 403) {
-                renderUserAdminNoPermission("user", data.detail || "当前账号不是管理员");
-                return;
-            }
-
-            setUserAdminMessage(`读取用户列表失败：${formatUserAdminError(data)}`, true);
-            renderUserAdminEmpty("用户列表读取失败。");
+            handleUserAdminListError(response.status, data);
             return;
         }
 
-        userAdminUsers = Array.isArray(data.data) ? data.data : [];
-        renderUserAdminList(userAdminUsers, data.total || 0);
+        userAdminUsers = readUserAdminItems(data);
+        userAdminTotal = readUserAdminTotal(data, userAdminUsers.length);
+        userAdminPageSize = Number(data.limit || userAdminPageSize) || userAdminPageSize;
+
+        if (!userAdminUsers.length && userAdminTotal > 0 && userAdminPage > getUserAdminTotalPages()) {
+            userAdminPage = getUserAdminTotalPages();
+            await loadUserAdminList();
+            return;
+        }
+
+        renderUserAdminList(userAdminUsers, userAdminTotal);
+        renderUserAdminPagination();
     } catch (error) {
-        setUserAdminMessage(`读取用户列表失败：${error.message}`, true);
-        renderUserAdminEmpty("请确认后端已启动，并且 /docs 可以打开。");
+        setUserAdminMessage(`读取用户列表失败：${formatUserAdminNetworkError(error)}`, true);
+        renderUserAdminEmpty("网络错误，请确认后端已启动，并且 /docs 可以打开。");
+        renderUserAdminPagination();
     }
+}
+
+function handleUserAdminListError(status, data) {
+    const detail = formatUserAdminError(data);
+
+    if (status === 401) {
+        renderUserAdminNoPermission("guest", detail || "未登录或 token 失效");
+        return;
+    }
+
+    if (status === 403) {
+        renderUserAdminNoPermission("user", detail || "无权限访问用户管理");
+        return;
+    }
+
+    setUserAdminMessage(`读取用户列表失败：${detail}`, true);
+    renderUserAdminEmpty("用户列表读取失败。");
+    renderUserAdminPagination();
+}
+
+function searchUserAdminList() {
+    userAdminPage = 1;
+    loadUserAdminList();
 }
 
 function handleUserAdminSearchKey(event) {
     if (event.key === "Enter") {
-        loadUserAdminList();
+        searchUserAdminList();
     }
+}
+
+function handleUserAdminFilterChange() {
+    userAdminPage = 1;
+    loadUserAdminList();
+}
+
+function handleUserAdminPageSizeChange() {
+    userAdminPage = 1;
+    syncUserAdminPageSizeFromControl();
+    loadUserAdminList();
 }
 
 function resetUserAdminFilters() {
     const keywordInput = document.getElementById("userAdminKeyword");
     const roleFilter = document.getElementById("userAdminRoleFilter");
+    const pageSize = document.getElementById("userAdminPageSize");
 
     if (keywordInput) {
         keywordInput.value = "";
@@ -115,6 +158,30 @@ function resetUserAdminFilters() {
         roleFilter.value = "";
     }
 
+    if (pageSize) {
+        pageSize.value = "20";
+    }
+
+    userAdminPage = 1;
+    syncUserAdminPageSizeFromControl();
+    loadUserAdminList();
+}
+
+function goUserAdminPrevPage() {
+    if (userAdminPage <= 1) {
+        return;
+    }
+
+    userAdminPage -= 1;
+    loadUserAdminList();
+}
+
+function goUserAdminNextPage() {
+    if (!canUserAdminGoNext()) {
+        return;
+    }
+
+    userAdminPage += 1;
     loadUserAdminList();
 }
 
@@ -133,16 +200,11 @@ function openUserRoleModal(userId) {
 
     userRoleEditingUser = user;
 
-    const notice = document.getElementById("userRoleModalNotice");
     const newRole = document.getElementById("userRoleNewRole");
     const password = document.getElementById("userRoleSystemPassword");
     const confirmText = document.getElementById("userRoleConfirmText");
     const message = document.getElementById("userRoleModalMessage");
     const mask = document.getElementById("userRoleModalMask");
-
-    if (notice) {
-        notice.innerText = `正在修改用户：${user.username || user.account || ""}（${user.nickname || "无昵称"}）。该操作只修改角色，不删除用户、不重置密码、不封禁账号。`;
-    }
 
     if (newRole) {
         newRole.value = user.role === "admin" ? "user" : "admin";
@@ -161,9 +223,29 @@ function openUserRoleModal(userId) {
         message.style.color = "";
     }
 
+    updateUserRoleModalPreview();
+
     if (mask) {
         mask.style.display = "flex";
     }
+}
+
+function updateUserRoleModalPreview() {
+    const notice = document.getElementById("userRoleModalNotice");
+    const newRole = document.getElementById("userRoleNewRole")?.value || "";
+
+    if (!notice || !userRoleEditingUser) {
+        return;
+    }
+
+    notice.innerHTML = `
+        <div><strong>用户名：</strong>${escapeUserAdminHtml(userRoleEditingUser.username || userRoleEditingUser.account || "")}</div>
+        <div><strong>昵称：</strong>${escapeUserAdminHtml(userRoleEditingUser.nickname || "无昵称")}</div>
+        <div><strong>当前角色：</strong>${renderUserRoleBadgeHtml(userRoleEditingUser.role)}</div>
+        <div><strong>将修改为：</strong>${renderUserRoleBadgeHtml(newRole)}</div>
+        <div class="notice">系统密码请输入：xgw2026；确认文字必须输入：修改角色。</div>
+        <div class="notice">该操作只修改角色，不删除用户、不重置密码、不封禁账号。</div>
+    `;
 }
 
 function closeUserRoleModal() {
@@ -188,7 +270,7 @@ async function submitUserRoleChange() {
     const confirmText = document.getElementById("userRoleConfirmText")?.value || "";
 
     if (!systemPassword) {
-        setUserRoleModalMessage("请输入系统密码。", true);
+        setUserRoleModalMessage("请输入系统密码。系统密码为：xgw2026", true);
         return;
     }
 
@@ -216,19 +298,20 @@ async function submitUserRoleChange() {
         }
 
         closeUserRoleModal();
-        setUserAdminMessage("用户角色已更新。");
+        setUserAdminMessage(`用户角色已更新：${escapeTextForMessage(data.data?.username || data.data?.account || "目标用户")} -> ${getUserRoleText(data.data?.role)}`);
         await loadUserAdminList();
     } catch (error) {
-        setUserRoleModalMessage(`修改失败：${error.message}`, true);
+        setUserRoleModalMessage(`修改失败：${formatUserAdminNetworkError(error)}`, true);
     }
 }
 
 function renderUserAdminList(users, total) {
     const summary = document.getElementById("userAdminSummary");
     const list = document.getElementById("userAdminList");
+    const totalPages = getUserAdminTotalPages();
 
     if (summary) {
-        summary.innerText = `共找到 ${total} 个用户，当前显示 ${users.length} 个。`;
+        summary.innerText = `共 ${total} 个用户，当前第 ${userAdminPage} / ${totalPages} 页，每页 ${userAdminPageSize} 条，本页显示 ${users.length} 条。`;
     }
 
     if (!list) {
@@ -236,7 +319,7 @@ function renderUserAdminList(users, total) {
     }
 
     if (!users.length) {
-        list.innerHTML = `<div class="empty">没有符合条件的用户。</div>`;
+        list.innerHTML = `<div class="empty user-admin-empty">暂无匹配用户</div>`;
         return;
     }
 
@@ -264,8 +347,6 @@ function renderUserAdminList(users, total) {
 
 function renderUserAdminRow(user) {
     const isSelf = userAdminCurrentUser && Number(user.id) === Number(userAdminCurrentUser.id);
-    const roleText = user.role === "admin" ? "管理员" : "普通用户";
-    const roleClass = user.role === "admin" ? "tag" : "tag warning";
     const disabledAttr = isSelf ? "disabled" : "";
     const disabledClass = isSelf ? " disabled-button" : "";
     const buttonText = isSelf ? "当前账号" : "修改角色";
@@ -275,7 +356,7 @@ function renderUserAdminRow(user) {
             <td>${escapeUserAdminHtml(user.id)}</td>
             <td>${escapeUserAdminHtml(user.username || user.account || "")}</td>
             <td>${escapeUserAdminHtml(user.nickname || "")}</td>
-            <td><span class="${roleClass}">${roleText}</span></td>
+            <td>${renderUserRoleBadgeHtml(user.role)}</td>
             <td>${escapeUserAdminHtml(formatUserAdminDate(user.created_at))}</td>
             <td>${escapeUserAdminHtml(formatUserAdminDate(user.updated_at))}</td>
             <td>
@@ -285,29 +366,66 @@ function renderUserAdminRow(user) {
     `;
 }
 
+function renderUserRoleBadgeHtml(role) {
+    const roleClass = role === "admin" ? "user-role-badge-admin" : "user-role-badge-user";
+    return `<span class="user-role-badge ${roleClass}">${escapeUserAdminHtml(getUserRoleText(role))}</span>`;
+}
+
+function getUserRoleText(role) {
+    return role === "admin" ? "管理员" : "普通用户";
+}
+
+function renderUserAdminPagination() {
+    const pagination = document.getElementById("userAdminPagination");
+
+    if (!pagination) {
+        return;
+    }
+
+    const totalPages = getUserAdminTotalPages();
+    const prevDisabled = userAdminPage <= 1 ? "disabled" : "";
+    const nextDisabled = canUserAdminGoNext() ? "" : "disabled";
+
+    pagination.innerHTML = `
+        <button class="small-button filter-button" ${prevDisabled} onclick="goUserAdminPrevPage()">上一页</button>
+        <span class="user-admin-page-info">第 ${userAdminPage} / ${totalPages} 页</span>
+        <button class="small-button filter-button" ${nextDisabled} onclick="goUserAdminNextPage()">下一页</button>
+    `;
+}
+
 function renderUserAdminLoading() {
     const summary = document.getElementById("userAdminSummary");
     const list = document.getElementById("userAdminList");
+    const pagination = document.getElementById("userAdminPagination");
 
     if (summary) {
         summary.innerText = "正在加载用户列表...";
     }
 
     if (list) {
-        list.innerHTML = `<div class="empty">正在加载用户列表...</div>`;
+        list.innerHTML = `<div class="empty user-admin-loading">正在加载用户列表...</div>`;
+    }
+
+    if (pagination) {
+        pagination.innerHTML = "";
     }
 }
 
 function renderUserAdminEmpty(text) {
     const summary = document.getElementById("userAdminSummary");
     const list = document.getElementById("userAdminList");
+    const pagination = document.getElementById("userAdminPagination");
 
     if (summary) {
         summary.innerText = "";
     }
 
     if (list) {
-        list.innerHTML = `<div class="empty">${escapeUserAdminHtml(text)}</div>`;
+        list.innerHTML = `<div class="empty user-admin-empty">${escapeUserAdminHtml(text)}</div>`;
+    }
+
+    if (pagination) {
+        pagination.innerHTML = "";
     }
 }
 
@@ -338,6 +456,53 @@ function renderUserAdminNoPermission(role, reason) {
     `;
 }
 
+function readUserAdminItems(data) {
+    if (Array.isArray(data.items)) {
+        return data.items;
+    }
+
+    if (Array.isArray(data.data)) {
+        return data.data;
+    }
+
+    return [];
+}
+
+function readUserAdminTotal(data, fallback) {
+    if (Number.isFinite(Number(data.total_count))) {
+        return Number(data.total_count);
+    }
+
+    if (Number.isFinite(Number(data.total))) {
+        return Number(data.total);
+    }
+
+    return fallback;
+}
+
+function syncUserAdminPageSizeFromControl() {
+    const pageSizeValue = document.getElementById("userAdminPageSize")?.value || "20";
+    const nextPageSize = Number(pageSizeValue);
+
+    userAdminPageSize = [20, 50, 100].includes(nextPageSize) ? nextPageSize : 20;
+}
+
+function canUserAdminGoNext() {
+    if (userAdminTotal > 0) {
+        return userAdminPage * userAdminPageSize < userAdminTotal;
+    }
+
+    return userAdminUsers.length >= userAdminPageSize;
+}
+
+function getUserAdminTotalPages() {
+    if (!userAdminTotal) {
+        return 1;
+    }
+
+    return Math.max(1, Math.ceil(userAdminTotal / userAdminPageSize));
+}
+
 function getUserAdminToken() {
     return localStorage.getItem(USER_ADMIN_TOKEN_KEY) || "";
 }
@@ -350,7 +515,7 @@ function setUserAdminMessage(text, isError) {
     }
 
     message.innerText = text || "";
-    message.style.color = isError ? "#c0392b" : "";
+    message.className = isError ? "message user-admin-message user-admin-message-error" : "message user-admin-message";
 }
 
 function setUserRoleModalMessage(text, isError) {
@@ -361,7 +526,7 @@ function setUserRoleModalMessage(text, isError) {
     }
 
     message.innerText = text || "";
-    message.style.color = isError ? "#c0392b" : "";
+    message.className = isError ? "message user-admin-message user-admin-message-error" : "message user-admin-message";
 }
 
 function formatUserAdminDate(value) {
@@ -388,6 +553,14 @@ function formatUserAdminError(data) {
     }
 
     return JSON.stringify(data);
+}
+
+function formatUserAdminNetworkError(error) {
+    return error && error.message ? error.message : "网络错误";
+}
+
+function escapeTextForMessage(text) {
+    return String(text || "");
 }
 
 function escapeUserAdminHtml(text) {
