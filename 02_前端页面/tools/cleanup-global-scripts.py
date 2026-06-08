@@ -20,7 +20,7 @@ GLOBAL_SCRIPT_NAMES = [
     "page-scope-cleanup.js",
 ]
 
-current_dir = Path(__file__).parent
+current_dir = Path(__file__).resolve().parent.parent
 html_files = sorted(current_dir.glob("*.html"))
 
 changed = []

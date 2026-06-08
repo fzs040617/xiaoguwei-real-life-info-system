@@ -1,13 +1,13 @@
 # add-global-loader-to-html.py
 # 作用：自动给当前文件夹下所有 .html 文件添加 global-loader.js 引用。
 # 用法：在 02_前端页面 文件夹里运行：
-# py add-global-loader-to-html.py
+# py tools\add-global-loader-to-html.py
 
 from pathlib import Path
 
 SCRIPT_LINE = '<script src="global-loader.js?v=45"></script>'
 
-current_dir = Path(__file__).parent
+current_dir = Path(__file__).resolve().parent.parent
 html_files = sorted(current_dir.glob("*.html"))
 
 changed = []
