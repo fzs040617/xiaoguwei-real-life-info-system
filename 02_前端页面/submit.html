@@ -10,13 +10,21 @@
 <div class="header">
     <div class="header-inner">
         <div>
-            <h1>提交一条线索</h1>
+            <h1>提交线索</h1>
             <p>用户投稿会先进入线索库，审核后才能进入真实库</p>
         </div>
         <div class="header-actions">
-            <button class="header-button" onclick="location.href='index.html'">返回首页</button>
-            <button class="header-button" onclick="location.href='crawler.html'">管理采集目标</button>
+            <button class="header-button" onclick="location.href='index.html'">首页</button>
+            <button class="header-button" onclick="location.href='submit.html'">提交线索</button>
+            <button class="header-button" onclick="location.href='map.html'">地图中心</button>
+            <button class="header-button" onclick="location.href='route.html'">路线中心</button>
+            <button class="header-button" onclick="location.href='history.html'">历史中心</button>
             <button class="header-button" onclick="location.href='admin.html'">审核中心</button>
+            <button class="header-button" onclick="location.href='manage.html'">数据管理</button>
+            <button class="header-button" onclick="location.href='crawler.html'">采集管理</button>
+            <button class="header-button" onclick="location.href='dashboard.html'">数据看板</button>
+            <button class="header-button" onclick="location.href='backup.html'">备份</button>
+            <button class="header-button" onclick="location.href='feedback-admin.html'">反馈管理</button>
         </div>
     </div>
 </div>
@@ -61,7 +69,7 @@
         </div>
 
         <button onclick="submitClue()">提交线索</button>
-        <button style="margin-left: 8px;" onclick="location.href='index.html'">返回首页</button>
+        <button style="margin-left: 8px;" onclick="location.href='index.html'">首页</button>
 
         <div id="submitMessage" class="message"></div>
     </div>
