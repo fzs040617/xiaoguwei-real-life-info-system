@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
@@ -2408,6 +2409,13 @@ class AuthUpdateV2Request(BaseModel):
     password_confirm: Optional[str] = None
 
 
+class AuthUserRoleAdminRequest(BaseModel):
+    token: str = ""
+    system_password: str = ""
+    new_role: str = ""
+    confirm_text: str = ""
+
+
 @app.post("/auth/register-v2")
 def register_user_v2(
     request: AuthRegisterV2Request,
@@ -2595,6 +2603,108 @@ def require_admin_user(db: Session, token: str):
 def verify_system_password(system_password: str):
     if system_password != SYSTEM_ADMIN_PASSWORD:
         raise HTTPException(status_code=403, detail="系统密码错误，禁止执行危险操作")
+
+
+def admin_safe_user_data(user: AuthUser):
+    return {
+        "id": user.id,
+        "username": user.account,
+        "account": user.account,
+        "nickname": user.nickname,
+        "role": user.role,
+        "avatar_base64": user.avatar_base64,
+        "created_at": user.created_at,
+        "updated_at": None,
+        "last_login_at": user.last_login_at
+    }
+
+
+@app.get("/auth/users-admin")
+def list_auth_users_admin(
+    token: str = "",
+    keyword: Optional[str] = None,
+    role: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    require_admin_user(db, token)
+
+    safe_limit = max(1, min(limit, 100))
+    safe_offset = max(0, offset)
+
+    query = db.query(AuthUser)
+
+    keyword_text = (keyword or "").strip()
+    if keyword_text:
+        keyword_like = f"%{keyword_text}%"
+        query = query.filter(
+            or_(
+                AuthUser.account.like(keyword_like),
+                AuthUser.nickname.like(keyword_like)
+            )
+        )
+
+    role_text = (role or "").strip()
+    if role_text:
+        if role_text not in ["admin", "user"]:
+            raise HTTPException(status_code=400, detail="用户角色只能是 admin 或 user")
+        query = query.filter(AuthUser.role == role_text)
+
+    total = query.count()
+    users = (
+        query
+        .order_by(AuthUser.id.asc())
+        .offset(safe_offset)
+        .limit(safe_limit)
+        .all()
+    )
+
+    return {
+        "message": "用户列表读取成功",
+        "total": total,
+        "limit": safe_limit,
+        "offset": safe_offset,
+        "data": [admin_safe_user_data(user) for user in users]
+    }
+
+
+@app.patch("/auth/users/{user_id}/role-admin")
+def update_auth_user_role_admin(
+    user_id: int,
+    request: AuthUserRoleAdminRequest,
+    db: Session = Depends(get_db)
+):
+    admin_user = require_admin_user(db, request.token)
+    verify_system_password(request.system_password)
+
+    if request.confirm_text != "修改角色":
+        raise HTTPException(status_code=400, detail="确认文字错误，请输入：修改角色")
+
+    new_role = (request.new_role or "").strip()
+    if new_role not in ["admin", "user"]:
+        raise HTTPException(status_code=400, detail="新角色只能是 admin 或 user")
+
+    target_user = db.query(AuthUser).filter(AuthUser.id == user_id).first()
+    if target_user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if target_user.id == admin_user.id:
+        raise HTTPException(status_code=400, detail="不能修改当前登录管理员自己的角色")
+
+    if target_user.role == "admin" and new_role != "admin":
+        admin_count = db.query(AuthUser).filter(AuthUser.role == "admin").count()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="不能降级最后一个管理员")
+
+    target_user.role = new_role
+    db.commit()
+    db.refresh(target_user)
+
+    return {
+        "message": "用户角色已更新",
+        "data": admin_safe_user_data(target_user)
+    }
 
 
 @app.delete("/update-history/clear-all-admin-v2")

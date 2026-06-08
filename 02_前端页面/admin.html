@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -40,6 +40,14 @@
     </div>
 
     <div class="box">
+        <h2>用户管理</h2>
+        <p class="notice">
+            查看系统用户、按角色筛选，并在系统密码确认后修改用户角色。不支持删除用户、重置密码或封禁账号。
+        </p>
+        <button onclick="location.href='user-admin.html'">进入用户管理</button>
+    </div>
+
+    <div class="box">
         <h2>搜索待审核线索</h2>
         <div class="search-box">
             <input id="keywordInput" placeholder="搜索：贝岗、夜宵、租房、打印店、测试线索" onkeydown="handleSearchKeyDown(event)">
@@ -73,6 +81,6 @@
 <script src="detail-link.js"></script>
 <script src="history-auto.js?v=19"></script>
 <script src="history-badge.js?v=17"></script>
-<script src="global-loader.js?v=60"></script>
+<script src="global-loader.js?v=61"></script>
 </body>
 </html>

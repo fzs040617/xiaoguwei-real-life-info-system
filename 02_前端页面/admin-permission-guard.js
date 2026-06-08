@@ -29,7 +29,8 @@
         "crawler.html",
         "dashboard.html",
         "feedback-admin.html",
-        "manage.html"
+        "manage.html",
+        "user-admin.html"
     ];
 
     const adminOnlyButtonTexts = [
@@ -38,7 +39,8 @@
         "数据管理",
         "数据看板",
         "备份导出",
-        "更新历史"
+        "更新历史",
+        "用户管理"
     ];
 
     const extraAdminOnlyButtonTexts = [
@@ -52,6 +54,7 @@
         "\u5907\u4efd\u5bfc\u51fa",
         "\u5907\u4efd\u5bfc\u5165",
         "\u53cd\u9988\u7ba1\u7406",
+        "\u7528\u6237\u7ba1\u7406",
         "\u6e05\u7a7a\u5386\u53f2",
         "\u5bfc\u5165\u5907\u4efd",
         "\u5220\u9664",

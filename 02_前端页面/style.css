@@ -383,6 +383,52 @@ button:hover {
     margin-bottom: 6px;
 }
 
+.user-admin-toolbar {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) 180px auto auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.user-admin-table-wrap {
+    overflow-x: auto;
+}
+
+.user-admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+
+.user-admin-table th,
+.user-admin-table td {
+    padding: 12px 10px;
+    border-bottom: 1px solid #edf0f2;
+    text-align: left;
+    vertical-align: middle;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.user-admin-table th {
+    background: #eef7f2;
+    color: #1f7a4d;
+    font-weight: bold;
+}
+
+.user-admin-table tr:last-child td {
+    border-bottom: none;
+}
+
+@media (max-width: 900px) {
+    .user-admin-toolbar {
+        grid-template-columns: 1fr;
+    }
+}
+
 /* 密码框眼睛按钮 */
 .password-eye-wrapper {
     position: relative;
