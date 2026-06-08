@@ -125,6 +125,7 @@ window.registerUser = async function () {
         closeUserModal();
         renderUserWidget();
         renderUserMenu();
+        notifyUserWidgetAuthChanged();
 
         alert(`注册成功。你的角色是：${currentUser.role === "admin" ? "管理员" : "普通用户"}`);
 
@@ -258,6 +259,7 @@ window.updateUserProfile = async function () {
         closeUserModal();
         renderUserWidget();
         renderUserMenu();
+        notifyUserWidgetAuthChanged();
 
         alert("用户信息已更新。");
 

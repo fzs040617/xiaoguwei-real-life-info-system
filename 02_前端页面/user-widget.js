@@ -13,6 +13,10 @@ window.addEventListener("load", () => {
     loadCurrentUser();
 });
 
+window.addEventListener("xgw-auth-changed", () => {
+    loadCurrentUser();
+});
+
 function injectUserWidget() {
     if (document.getElementById("userWidget")) {
         return;
@@ -307,6 +311,7 @@ function renderUserMenu() {
                 ? `<button class="user-menu-button user-menu-secondary" onclick="alert('管理员功能后续接入：清空历史、用户管理、权限控制。')">管理员权限</button>`
                 : ``
         }
+        <button class="user-menu-button user-menu-secondary" onclick="switchAccount()">切换账号</button>
         <button class="user-menu-button user-menu-danger" onclick="logoutUser()">退出登录</button>
     `;
 }
@@ -529,6 +534,7 @@ async function registerUser() {
         closeUserModal();
         renderUserWidget();
         renderUserMenu();
+        notifyUserWidgetAuthChanged();
 
         alert(`注册成功。你的角色是：${currentUser.role === "admin" ? "管理员" : "普通用户"}`);
 
@@ -566,6 +572,7 @@ async function loginUser() {
         closeUserModal();
         renderUserWidget();
         renderUserMenu();
+        notifyUserWidgetAuthChanged();
 
         alert("登录成功。");
 
@@ -616,6 +623,7 @@ async function updateUserProfile() {
         closeUserModal();
         renderUserWidget();
         renderUserMenu();
+        notifyUserWidgetAuthChanged();
 
         alert("用户信息已更新。");
 
@@ -628,10 +636,10 @@ async function logoutUser() {
     const token = localStorage.getItem(USER_TOKEN_KEY);
 
     if (!token) {
-        localStorage.removeItem(USER_TOKEN_KEY);
-        currentUser = null;
+        clearUserWidgetAuthState();
         renderUserWidget();
         renderUserMenu();
+        notifyUserWidgetAuthChanged();
         return;
     }
 
@@ -645,13 +653,36 @@ async function logoutUser() {
         console.log("退出登录请求失败，但本地会清除登录状态", error);
     }
 
-    localStorage.removeItem(USER_TOKEN_KEY);
-    currentUser = null;
+    clearUserWidgetAuthState();
     closeUserMenu();
     renderUserWidget();
     renderUserMenu();
+    notifyUserWidgetAuthChanged();
 
     alert("已退出登录。");
+}
+
+function switchAccount() {
+    clearUserWidgetAuthState();
+    closeUserMenu();
+    renderUserWidget();
+    renderUserMenu();
+    notifyUserWidgetAuthChanged();
+    openLoginModal();
+}
+
+function clearUserWidgetAuthState() {
+    localStorage.removeItem(USER_TOKEN_KEY);
+    currentUser = null;
+    editingAvatarBase64 = "";
+}
+
+function notifyUserWidgetAuthChanged() {
+    try {
+        window.dispatchEvent(new CustomEvent("xgw-auth-changed"));
+    } catch (error) {
+        console.log("登录状态变化事件触发失败", error);
+    }
 }
 
 function openSystemSettings() {

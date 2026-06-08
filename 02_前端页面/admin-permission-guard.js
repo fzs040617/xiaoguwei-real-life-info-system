@@ -64,6 +64,10 @@
         startPermissionGuard();
     });
 
+    window.addEventListener("xgw-auth-changed", () => {
+        checkPermissionNow();
+    });
+
     const observer = new MutationObserver(() => {
         applyCurrentPermission();
     });
