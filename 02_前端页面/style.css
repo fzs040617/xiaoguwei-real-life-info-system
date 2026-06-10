@@ -383,6 +383,45 @@ button:hover {
     margin-bottom: 6px;
 }
 
+.collector-form-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) 160px 120px;
+    gap: 12px;
+}
+
+.collector-toolbar {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) 170px auto;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.collector-url-row {
+    display: grid;
+    grid-template-columns: minmax(220px, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.collector-detect-message {
+    margin-top: 8px;
+    min-height: 20px;
+}
+
+.collector-page .summary {
+    max-height: 120px;
+    overflow: auto;
+}
+
+@media (max-width: 900px) {
+    .collector-form-grid,
+    .collector-toolbar,
+    .collector-url-row {
+        grid-template-columns: 1fr;
+    }
+}
+
 .user-admin-toolbar {
     display: grid;
     grid-template-columns: minmax(220px, 1fr) 180px 150px auto auto;

@@ -2,16 +2,16 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>采集目标管理｜小谷围岛广州大学城真实生活信息共建系统</title>
+    <title>外部平台采集管理｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body onload="loadCrawlerTargets()">
+<body class="collector-page" onload="initCollectorPage()">
 
 <div class="header">
     <div class="header-inner">
         <div>
-            <h1>采集目标管理</h1>
-            <p>配置每天早上 9 点自动采集的公开网页目标</p>
+            <h1>外部平台采集管理</h1>
+            <p>配置公开 RSS、公开 API、公开 HTML 列表页的每日采集</p>
         </div>
         <div class="header-actions">
             <button class="header-button" onclick="location.href='index.html'">首页</button>
@@ -32,63 +32,89 @@
 <div class="container">
     <div class="box">
         <p class="notice">
-            第一版只采集公开网页，不处理登录、验证码、私密内容。新增采集目标后，可以点击“立即执行采集”测试。
+            第一版只支持公开可访问的数据源，不处理登录、验证码、私密内容、付费墙或需要特殊授权的接口。
+            不要填写平台账号、cookie、token、密钥。
         </p>
 
-        <div class="form-row">
-            <label>采集网址</label>
-            <input id="targetUrl" placeholder="例如：https://www.iana.org/domains/reserved">
+        <div class="collector-form-grid">
+            <div class="form-row">
+                <label>名称</label>
+                <input id="collectorName" placeholder="例如：大学城公开资讯 RSS">
+            </div>
+            <div class="form-row">
+                <label>平台</label>
+                <input id="collectorPlatform" placeholder="例如：公开网站、学校公告、RSS">
+            </div>
+            <div class="form-row">
+                <label>类型</label>
+                <select id="collectorType">
+                    <option value="rss">rss / atom</option>
+                    <option value="api">公开 JSON API</option>
+                    <option value="public_html">公开 HTML 列表页</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label>是否启用</label>
+                <select id="collectorEnabled">
+                    <option value="true">启用</option>
+                    <option value="false">停用</option>
+                </select>
+            </div>
         </div>
 
         <div class="form-row">
-            <label>分类</label>
-            <select id="targetCategory">
-                <option value="外部线索">外部线索</option>
-                <option value="探店">探店</option>
-                <option value="租房">租房</option>
-                <option value="地图">地图</option>
-                <option value="路线">路线</option>
-                <option value="生活服务">生活服务</option>
-                <option value="避坑纠错">避坑纠错</option>
-                <option value="测试线索">测试线索</option>
-            </select>
+            <label>URL</label>
+            <div class="collector-url-row">
+                <input id="collectorUrl" placeholder="仅填写公开可访问的 RSS、JSON API 或 HTML 列表页 URL">
+                <button type="button" onclick="detectCollectorSource()">智能识别</button>
+            </div>
+            <div id="collectorDetectMessage" class="message collector-detect-message"></div>
         </div>
 
         <div class="form-row">
-            <label>来源平台</label>
-            <input id="targetPlatform" placeholder="例如：公开网页、公众号、大学城公开信息页">
+            <label>关键词</label>
+            <input id="collectorKeyword" placeholder="多个关键词用逗号分隔；留空时使用大学城相关默认关键词">
         </div>
 
         <div class="form-row">
             <label>备注</label>
-            <textarea id="targetNote" placeholder="例如：大学城美食相关、租房线索来源等"></textarea>
+            <textarea id="collectorNotes" placeholder="说明来源用途、公开性和人工确认情况"></textarea>
         </div>
 
-        <button onclick="submitCrawlTarget()">新增采集目标</button>
-        <button style="margin-left: 8px;" onclick="runCrawlerNow()">立即执行采集</button>
+        <button onclick="submitCollectorSource()">新增采集源</button>
+        <button style="margin-left: 8px;" onclick="runAllCollectorSources()">运行全部启用源</button>
 
-        <div id="targetMessage" class="message"></div>
-        <div id="crawlResultBox" class="crawl-result-box" style="display:none;"></div>
+        <div id="collectorMessage" class="message"></div>
     </div>
 
     <div class="section">
-        <h2>当前采集目标</h2>
-        <div id="targetList" class="empty">正在加载采集目标...</div>
+        <h2>采集源列表</h2>
+        <div id="collectorSourceList" class="empty">正在加载采集源...</div>
+    </div>
+
+    <div class="section">
+        <h2>采集条目</h2>
+        <div class="collector-toolbar">
+            <input id="collectorItemKeyword" placeholder="按标题、摘要或链接搜索">
+            <select id="collectorItemStatus">
+                <option value="">全部状态</option>
+                <option value="new">new</option>
+                <option value="reviewed">reviewed</option>
+                <option value="ignored">ignored</option>
+            </select>
+            <button onclick="loadCollectorItems()">筛选</button>
+        </div>
+        <div id="collectorItemList" class="empty">正在加载采集条目...</div>
+    </div>
+
+    <div class="section">
+        <h2>运行日志</h2>
+        <div id="collectorRunList" class="empty">正在加载运行日志...</div>
     </div>
 </div>
 
 <script src="app.js?v=9"></script>
-<script src="generic-smart-fill.js?v=8"></script>
-<script src="smart-progress.js?v=8"></script>
-<script src="generic-smart-fix.js?v=8"></script>
-<script src="submit-action-fix.js?v=10"></script>
-<script src="request-timeout-fix.js?v=8"></script>
-<script src="smart-edit-panel.js?v=10"></script>
-<script src="smart-edit-hook.js?v=10"></script>
-<script src="submit-success-reload.js?v=12"></script>
-<script src="smart-form-mode.js?v=14"></script>
-<script src="smart-progress-cleanup.js?v=15"></script>
-<script src="history-auto.js?v=19"></script>
+<script src="crawler-collector.js?v=1"></script>
 <script src="global-loader.js?v=61"></script>
 </body>
 </html>

@@ -4,12 +4,25 @@ from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Any, Dict, Optional
 import requests
 from bs4 import BeautifulSoup
 
 from database import Base, engine, SessionLocal
 from models import Clue, VerifiedItem, CrawlTarget, Feedback, MapPoint, RoutePlan, UpdateHistory, AuthUser
+from platform_collector import (
+    COLLECTOR_DB_PATH,
+    create_source as collector_create_source,
+    detect_source as collector_detect_source,
+    get_source as collector_get_source,
+    init_collector_db,
+    list_items as collector_list_items,
+    list_runs as collector_list_runs,
+    list_sources as collector_list_sources,
+    run_all_enabled_sources as collector_run_all_enabled_sources,
+    run_source as collector_run_source,
+    update_source as collector_update_source,
+)
 from scheduler import start_scheduler
 
 Base.metadata.create_all(bind=engine)
@@ -34,6 +47,10 @@ scheduler = None
 @app.on_event("startup")
 def on_startup():
     global scheduler
+    try:
+        init_collector_db()
+    except Exception as exc:
+        print(f"[外部平台采集数据库] 初始化失败，但不影响主系统启动：{exc}")
     scheduler = start_scheduler()
 
 
@@ -106,6 +123,35 @@ class AdminTokenRequest(BaseModel):
     token: str = ""
 
 
+class CollectorSourceCreate(BaseModel):
+    token: str = ""
+    name: str
+    platform: Optional[str] = ""
+    source_type: str
+    url: str
+    keyword: Optional[str] = ""
+    enabled: Optional[bool] = True
+    interval_hours: Optional[int] = 24
+    notes: Optional[str] = ""
+
+
+class CollectorSourceUpdate(BaseModel):
+    token: str = ""
+    name: Optional[str] = None
+    platform: Optional[str] = None
+    source_type: Optional[str] = None
+    url: Optional[str] = None
+    keyword: Optional[str] = None
+    enabled: Optional[bool] = None
+    interval_hours: Optional[int] = None
+    notes: Optional[str] = None
+
+
+class CollectorSourceDetectRequest(BaseModel):
+    token: str = ""
+    url: str
+
+
 def require_admin_token(db: Session, token: Optional[str]):
     return require_admin_user(db, token or "")
 
@@ -142,6 +188,7 @@ def scheduler_status():
         "status": "ok",
         "message": "定时任务已配置",
         "daily_crawl_time": "每天早上 09:00",
+        "daily_platform_collector_time": "每天凌晨 03:30",
         "timezone": "Asia/Shanghai"
     }
 
@@ -157,6 +204,161 @@ def test_run_scheduler_job(
     return {
         "message": "手动触发每日采集任务成功",
         "result": result
+    }
+
+
+@app.get("/collector-admin/sources")
+def list_collector_sources(
+    token: str = "",
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, token)
+    return {
+        "message": "采集源列表读取成功",
+        "database": str(COLLECTOR_DB_PATH),
+        "data": collector_list_sources()
+    }
+
+
+@app.post("/collector-admin/sources")
+def create_collector_source(
+    request: CollectorSourceCreate,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+
+    if not request.name.strip():
+        raise HTTPException(status_code=400, detail="请填写采集源名称")
+    if not request.url.strip():
+        raise HTTPException(status_code=400, detail="请填写采集源 URL")
+
+    try:
+        source = collector_create_source(request.dict(exclude={"token"}))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "message": "采集源已创建",
+        "data": source
+    }
+
+
+@app.post("/collector-admin/detect-source")
+def detect_collector_source(
+    request: CollectorSourceDetectRequest,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+    return collector_detect_source(request.url)
+
+
+@app.patch("/collector-admin/sources/{source_id}")
+def update_collector_source(
+    source_id: int,
+    request: CollectorSourceUpdate,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+
+    payload: Dict[str, Any] = request.dict(exclude={"token"}, exclude_none=True)
+    if "name" in payload and not str(payload["name"]).strip():
+        raise HTTPException(status_code=400, detail="采集源名称不能为空")
+    if "url" in payload and not str(payload["url"]).strip():
+        raise HTTPException(status_code=400, detail="采集源 URL 不能为空")
+
+    try:
+        source = collector_update_source(source_id, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    if source is None:
+        raise HTTPException(status_code=404, detail="采集源不存在")
+
+    return {
+        "message": "采集源已更新",
+        "data": source
+    }
+
+
+@app.post("/collector-admin/sources/{source_id}/run")
+def run_collector_source_now(
+    source_id: int,
+    request: AdminTokenRequest,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+
+    if collector_get_source(source_id) is None:
+        raise HTTPException(status_code=404, detail="采集源不存在")
+
+    result = collector_run_source(source_id)
+    return {
+        "message": "采集源已执行",
+        "result": result
+    }
+
+
+@app.post("/collector-admin/run-all")
+def run_all_collector_sources_now(
+    request: AdminTokenRequest,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+    result = collector_run_all_enabled_sources()
+    return {
+        "message": "全部启用采集源已执行",
+        "result": result
+    }
+
+
+@app.get("/collector-admin/items")
+def list_collector_items(
+    token: str = "",
+    platform: str = "",
+    source_id: Optional[int] = None,
+    status: str = "",
+    keyword: str = "",
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, token)
+
+    try:
+        result = collector_list_items(
+            platform=platform.strip(),
+            source_id=source_id,
+            status=status.strip(),
+            keyword=keyword.strip(),
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "message": "采集条目列表读取成功",
+        **result
+    }
+
+
+@app.get("/collector-admin/runs")
+def list_collector_runs(
+    token: str = "",
+    source_id: Optional[int] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, token)
+    result = collector_list_runs(
+        source_id=source_id,
+        limit=limit,
+        offset=offset,
+    )
+    return {
+        "message": "采集运行记录读取成功",
+        **result
     }
 
 
