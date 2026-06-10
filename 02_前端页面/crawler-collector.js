@@ -1,6 +1,7 @@
 const COLLECTOR_TOKEN_KEY = "xgw_user_token";
 const COLLECTOR_BACKEND_URL = "http://127.0.0.1:8000";
 const COLLECTOR_NETWORK_MESSAGE = "无法连接后端，请确认 http://127.0.0.1:8000 已启动";
+let collectorLastAutoKeyword = "";
 
 function collectorToken() {
     if (typeof getAdminToken === "function") {
@@ -63,6 +64,12 @@ async function collectorRequest(path, options = {}) {
 async function initCollectorPage() {
     collectorMessage("");
     collectorDetectMessage("");
+    const urlInput = document.getElementById("collectorUrl");
+    if (urlInput) {
+        urlInput.addEventListener("input", () => {
+            collectorDetectMessage(urlInput.value.trim() ? "URL 已修改，请重新智能识别。" : "");
+        });
+    }
     await Promise.all([
         loadCollectorSources(),
         loadCollectorItems(),
@@ -108,17 +115,25 @@ async function detectCollectorSource() {
             return;
         }
 
-        setInputValue("collectorType", data.source_type || "", true);
-        setInputValue("collectorPlatform", data.platform || "", false);
-        setInputValue("collectorName", data.name || data.title || "", false);
+        const detectedType = normalizeCollectorSourceType(data.source_type || "");
+        const detectedPlatform = data.platform || platformFromCollectorUrl(url);
+        const detectedName = data.name || data.title || detectedPlatform;
+
+        setInputValue("collectorType", detectedType, true);
+        setInputValue("collectorPlatform", detectedPlatform, true);
+        setInputValue("collectorName", detectedName, true);
 
         const keywordInput = document.getElementById("collectorKeyword");
-        if (keywordInput && !keywordInput.value.trim() && data.keyword_suggestion) {
-            keywordInput.value = data.keyword_suggestion;
+        if (keywordInput && data.keyword_suggestion) {
+            const currentKeyword = keywordInput.value.trim();
+            if (!currentKeyword || currentKeyword === collectorLastAutoKeyword) {
+                keywordInput.value = data.keyword_suggestion;
+                collectorLastAutoKeyword = data.keyword_suggestion;
+            }
         }
 
         collectorDetectMessage(
-            `识别成功：类型 ${data.source_type || "-"}，平台 ${data.platform || "-"}，标题 ${data.title || data.name || "-"}`
+            `识别成功：类型 ${detectedType || "-"}，平台 ${detectedPlatform || "-"}，标题 ${data.title || detectedName || "-"}`
         );
     } catch (error) {
         collectorDetectMessage(`识别失败：${collectorErrorMessage(error)}`, true);
@@ -130,6 +145,22 @@ function setInputValue(id, value, alwaysReplace) {
     if (!input || !value) return;
     if (alwaysReplace || !input.value.trim()) {
         input.value = value;
+    }
+}
+
+function normalizeCollectorSourceType(sourceType) {
+    const value = String(sourceType || "").trim();
+    if (["rss", "api", "public_html"].includes(value)) {
+        return value;
+    }
+    return "public_html";
+}
+
+function platformFromCollectorUrl(url) {
+    try {
+        return new URL(url).hostname || "";
+    } catch (error) {
+        return "";
     }
 }
 
@@ -170,6 +201,7 @@ async function submitCollectorSource() {
         document.getElementById("collectorUrl").value = "";
         document.getElementById("collectorKeyword").value = "";
         document.getElementById("collectorNotes").value = "";
+        collectorLastAutoKeyword = "";
         await loadCollectorSources();
     } catch (error) {
         collectorMessage(`新增失败：${collectorErrorMessage(error)}`, true);
