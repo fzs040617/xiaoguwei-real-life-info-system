@@ -6,12 +6,15 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 import requests
+import re
+from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 
 from database import Base, engine, SessionLocal
 from models import Clue, VerifiedItem, CrawlTarget, Feedback, MapPoint, RoutePlan, UpdateHistory, AuthUser
 from platform_collector import (
     COLLECTOR_DB_PATH,
+    create_manual_item as collector_create_manual_item,
     create_source as collector_create_source,
     detect_source as collector_detect_source,
     get_source as collector_get_source,
@@ -19,6 +22,7 @@ from platform_collector import (
     list_items as collector_list_items,
     list_runs as collector_list_runs,
     list_sources as collector_list_sources,
+    preview_source as collector_preview_source,
     run_all_enabled_sources as collector_run_all_enabled_sources,
     run_source as collector_run_source,
     update_source as collector_update_source,
@@ -152,8 +156,134 @@ class CollectorSourceDetectRequest(BaseModel):
     url: str
 
 
+class CollectorManualItemCreate(BaseModel):
+    token: str = ""
+    platform: Optional[str] = ""
+    title: str
+    url: Optional[str] = ""
+    summary: Optional[str] = ""
+    notes: Optional[str] = ""
+
+
+class CollectorManualItemDetectRequest(BaseModel):
+    token: str = ""
+    platform: Optional[str] = ""
+    title: Optional[str] = ""
+    url: Optional[str] = ""
+    summary: Optional[str] = ""
+    notes: Optional[str] = ""
+    raw_text: Optional[str] = ""
+
+
 def require_admin_token(db: Session, token: Optional[str]):
     return require_admin_user(db, token or "")
+
+
+def normalize_manual_detect_text(text: str) -> str:
+    cleaned_lines = []
+    for line in (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        line = re.sub(r"\s+", " ", line).strip()
+        if line:
+            cleaned_lines.append(line)
+    return "\n".join(cleaned_lines)
+
+
+def infer_manual_platform_from_url(url: str) -> Dict[str, str]:
+    raw_url = (url or "").strip()
+    if not raw_url:
+        return {"platform": "", "domain": "", "warning": ""}
+
+    parsed = urlparse(raw_url if re.match(r"^https?://", raw_url, re.I) else f"https://{raw_url}")
+    domain = (parsed.netloc or parsed.path.split("/")[0]).lower()
+    domain = domain.split("@")[-1].split(":")[0].strip(".")
+    normalized_domain = domain[4:] if domain.startswith("www.") else domain
+
+    platform_rules = [
+        ("xiaohongshu.com", "小红书", True),
+        ("xhslink.com", "小红书", True),
+        ("meituan.com", "美团", True),
+        ("dianping.com", "大众点评", True),
+        ("mp.weixin.qq.com", "微信公众号", False),
+        ("sysu.edu.cn", "中山大学", False),
+        ("gzhu.edu.cn", "广州大学", False),
+        ("panyu.gov.cn", "番禺区政府 / 政府公开网页", False),
+    ]
+    platform = domain or normalized_domain
+    restricted = False
+    for suffix, name, is_restricted in platform_rules:
+        if normalized_domain == suffix or normalized_domain.endswith(f".{suffix}") or domain == suffix:
+            platform = name
+            restricted = is_restricted
+            break
+
+    warning = ""
+    if restricted:
+        warning = "该平台通常涉及登录、风控或授权接口，本次仅根据 URL 和手动粘贴文本辅助识别，不主动抓取平台内容。"
+
+    return {"platform": platform, "domain": domain, "warning": warning}
+
+
+def choose_manual_detect_title(clean_text: str) -> str:
+    if not clean_text:
+        return ""
+    lines = [line.strip() for line in clean_text.split("\n") if line.strip()]
+    if not lines:
+        return ""
+    for line in lines[:6]:
+        candidate = re.sub(r"^[#\-*·\d.、\s]+", "", line).strip()
+        if 6 <= len(candidate) <= 48:
+            return candidate
+    for line in lines[:6]:
+        candidate = re.sub(r"^[#\-*·\d.、\s]+", "", line).strip()
+        if 2 <= len(candidate) <= 80:
+            return candidate[:60]
+    return lines[0][:60]
+
+
+def build_manual_detect_summary(clean_text: str, title: str) -> str:
+    if not clean_text:
+        return ""
+    lines = [line.strip() for line in clean_text.split("\n") if line.strip()]
+    if title and lines and lines[0] == title and len(lines) > 1:
+        body = " ".join(lines[1:])
+    else:
+        body = " ".join(lines)
+    body = re.sub(r"\s+", " ", body).strip()
+    if len(body) > 180:
+        return body[:180].rstrip() + "..."
+    return body
+
+
+def detect_manual_item_fields(data: CollectorManualItemDetectRequest) -> Dict[str, Any]:
+    url = (data.url or "").strip()
+    raw_text = data.raw_text or ""
+    clean_text = normalize_manual_detect_text(raw_text)
+
+    if not url and not clean_text:
+        raise ValueError("请填写 URL 或粘贴公开文本后再识别")
+
+    platform_result = infer_manual_platform_from_url(url)
+    platform = platform_result["platform"] or "人工导入"
+    title = choose_manual_detect_title(clean_text)
+    summary = build_manual_detect_summary(clean_text, title)
+
+    if not title and platform_result["domain"]:
+        title = f"{platform}公开网页"
+
+    notes = (data.notes or "").strip() or "人工导入，来源由智能识别辅助填写"
+    message = "识别成功"
+    if url and not clean_text and platform_result["domain"]:
+        message = "已根据 URL 识别来源平台；可补充粘贴公开文本以识别标题和摘要"
+
+    return {
+        "ok": True,
+        "platform": platform,
+        "title": title,
+        "summary": summary,
+        "notes": notes,
+        "message": message,
+        "warning": platform_result["warning"],
+    }
 
 
 @app.get("/")
@@ -298,6 +428,28 @@ def run_collector_source_now(
     }
 
 
+@app.post("/collector-admin/sources/{source_id}/preview")
+def preview_collector_source_now(
+    source_id: int,
+    request: AdminTokenRequest,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+
+    if collector_get_source(source_id) is None:
+        raise HTTPException(status_code=404, detail="采集源不存在")
+
+    try:
+        result = collector_preview_source(source_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    return {
+        "message": "采集源预览完成，未写入数据库",
+        "result": result
+    }
+
+
 @app.post("/collector-admin/run-all")
 def run_all_collector_sources_now(
     request: AdminTokenRequest,
@@ -309,6 +461,42 @@ def run_all_collector_sources_now(
         "message": "全部启用采集源已执行",
         "result": result
     }
+
+
+@app.post("/collector-admin/items/manual")
+def create_manual_collector_item(
+    request: CollectorManualItemCreate,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+
+    if not request.title.strip():
+        raise HTTPException(status_code=400, detail="标题不能为空")
+
+    try:
+        item = collector_create_manual_item(request.dict(exclude={"token"}))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "message": "人工导入公开信息已保存到采集条目",
+        "data": item
+    }
+
+
+@app.post("/collector-admin/items/manual/detect")
+def detect_manual_collector_item(
+    request: CollectorManualItemDetectRequest,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+
+    try:
+        return detect_manual_item_fields(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=500, detail="人工导入智能识别失败，请检查输入后重试")
 
 
 @app.get("/collector-admin/items")

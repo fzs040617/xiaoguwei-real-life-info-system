@@ -30,91 +30,219 @@
 </div>
 
 <div class="container">
-    <div class="box">
-        <p class="notice">
-            第一版只支持公开可访问的数据源，不处理登录、验证码、私密内容、付费墙或需要特殊授权的接口。
-            不要填写平台账号、cookie、token、密钥。
-        </p>
+    <div id="collector-section-create" class="box collector-panel" data-section-id="create">
+        <div class="collector-panel-header">
+            <div>
+                <h2>新增采集源</h2>
+                <p>这里用于添加 RSS / JSON API / HTML 页面采集源，需要填写 URL。</p>
+            </div>
+            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-create">收起</button>
+        </div>
+        <div class="collector-panel-body">
+            <p class="notice">
+                第一版只支持公开可访问的数据源，不处理登录、验证码、私密内容、付费墙或需要特殊授权的接口。
+                不要填写平台账号、cookie、token、密钥。
+            </p>
+            <p class="notice">
+                美团、大众点评、小红书等平台通常涉及登录、动态渲染、风控或官方授权接口。本系统第一阶段不绕过登录、验证码、反爬，也不使用账号 cookie。若要接入此类平台，应使用官方开放平台、合作授权 API，或通过人工导入公开链接/文本的方式进入审核流程。
+            </p>
 
-        <div class="collector-form-grid">
+            <div class="collector-form-grid">
+                <div class="form-row">
+                    <label>名称</label>
+                    <input id="collectorName" placeholder="例如：大学城公开资讯 RSS">
+                </div>
+                <div class="form-row">
+                    <label>平台</label>
+                    <input id="collectorPlatform" placeholder="例如：公开网站、学校公告、RSS">
+                </div>
+                <div class="form-row">
+                    <label>类型</label>
+                    <select id="collectorType">
+                        <option value="rss">rss / atom</option>
+                        <option value="api">公开 JSON API</option>
+                        <option value="public_html">公开 HTML 列表页</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <label>是否启用</label>
+                    <select id="collectorEnabled">
+                        <option value="true">启用</option>
+                        <option value="false">停用</option>
+                    </select>
+                </div>
+            </div>
+
             <div class="form-row">
-                <label>名称</label>
-                <input id="collectorName" placeholder="例如：大学城公开资讯 RSS">
+                <label>URL</label>
+                <div class="collector-url-row">
+                    <input id="collectorUrl" placeholder="仅填写公开可访问的 RSS、JSON API 或 HTML 列表页 URL">
+                    <button type="button" onclick="detectCollectorSource()">智能识别</button>
+                </div>
+                <div id="collectorDetectMessage" class="message collector-detect-message"></div>
+            </div>
+
+            <div class="form-row">
+                <label>关键词</label>
+                <input id="collectorKeyword" placeholder="多个关键词可用空格、逗号、分号或换行分隔；留空时不过滤公开结果">
+            </div>
+
+            <div class="form-row">
+                <label>备注</label>
+                <textarea id="collectorNotes" placeholder="说明来源用途、公开性和人工确认情况"></textarea>
+            </div>
+
+            <button onclick="submitCollectorSource()">新增采集源</button>
+            <button style="margin-left: 8px;" onclick="runAllCollectorSources()">运行全部启用源</button>
+
+            <div id="collectorMessage" class="message"></div>
+            <div class="collector-collapse-row">
+                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-create">收起本区</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="collector-section-templates" class="section collector-panel" data-section-id="templates">
+        <div class="collector-panel-header">
+            <div>
+                <h2>推荐公开源模板</h2>
+                <p>点击模板只会填入上方采集源表单，不会自动新增。</p>
+            </div>
+            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-templates">收起</button>
+        </div>
+        <div class="collector-panel-body">
+            <div id="collectorTemplateList" class="collector-template-list"></div>
+            <div class="collector-collapse-row">
+                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-templates">收起本区</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="collector-section-manual" class="section collector-panel collector-manual-section" data-section-id="manual">
+        <div class="collector-panel-header">
+            <div>
+                <h2>人工导入公开信息（不抓取平台，仅手动保存内容）</h2>
+                <p>这里不是新增采集源。用于手动摘录已经公开可见的信息。</p>
+            </div>
+            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-manual">收起</button>
+        </div>
+        <div class="collector-panel-body">
+            <p class="notice">保存时不访问外部 URL，不读取账号、cookie、token 或密钥。</p>
+            <div class="collector-form-grid collector-manual-grid">
+                <div class="form-row">
+                    <label>来源平台</label>
+                    <input id="manualPlatform" placeholder="例如：小红书、点评、学校官网">
+                </div>
+                <div class="form-row">
+                    <label>标题</label>
+                    <input id="manualTitle" placeholder="必填">
+                </div>
+                <div class="form-row">
+                    <label>URL（可选）</label>
+                    <input id="manualUrl" placeholder="可留空，建议填写公开链接">
+                </div>
             </div>
             <div class="form-row">
-                <label>平台</label>
-                <input id="collectorPlatform" placeholder="例如：公开网站、学校公告、RSS">
+                <label>摘要</label>
+                <textarea id="manualSummary" placeholder="手动摘录公开内容摘要"></textarea>
             </div>
             <div class="form-row">
-                <label>类型</label>
-                <select id="collectorType">
-                    <option value="rss">rss / atom</option>
-                    <option value="api">公开 JSON API</option>
-                    <option value="public_html">公开 HTML 列表页</option>
+                <label>粘贴公开文本（可选，用于智能识别标题和摘要）</label>
+                <textarea id="manualRawText" placeholder="可粘贴从公开页面手动复制的文字。系统只做本地解析，不会绕过平台限制。"></textarea>
+                <p class="field-hint">可粘贴从公开页面手动复制的文字。系统只做本地解析，不会绕过平台限制。</p>
+            </div>
+            <div class="form-row">
+                <label>备注</label>
+                <textarea id="manualNotes" placeholder="例如：人工导入、待复核"></textarea>
+            </div>
+            <div class="collector-manual-actions">
+                <button type="button" class="btn-secondary" data-action="manual-detect">智能识别人工导入信息</button>
+                <button type="button" data-action="manual-import">保存到采集条目</button>
+            </div>
+            <div id="collectorManualMessage" class="message"></div>
+            <div class="collector-collapse-row">
+                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-manual">收起本区</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="collector-section-sources" class="section collector-panel collector-section-collapsed" data-section-id="sources">
+        <div class="collector-panel-header">
+            <div>
+                <h2 id="collectorSourceTitle">采集源列表</h2>
+                <p>默认显示精简摘要，展开单项后查看完整信息和预览结果。</p>
+            </div>
+            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-sources">展开</button>
+        </div>
+        <div class="collector-panel-body">
+            <div id="collectorSourceList" class="empty">正在加载采集源...</div>
+            <div class="collector-collapse-row">
+                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-sources">收起本区</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="collector-section-preview" class="section collector-panel" data-section-id="preview">
+        <div class="collector-panel-header">
+            <div>
+                <h2>预览抓取结果</h2>
+                <p>预览结果优先显示在对应采集源卡片下方，这里保留为辅助状态。</p>
+            </div>
+            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-preview">收起</button>
+        </div>
+        <div class="collector-panel-body">
+            <div id="collectorPreviewBox" class="empty">点击采集源旁的“预览”按钮后，这里会显示预览状态；预览不会写入数据库。</div>
+            <div class="collector-collapse-row">
+                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-preview">收起本区</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="collector-section-items" class="section collector-panel collector-section-collapsed" data-section-id="items">
+        <div class="collector-panel-header">
+            <div>
+                <h2 id="collectorItemTitle">采集条目列表</h2>
+                <p>展开后查看采集条目并筛选。</p>
+            </div>
+            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-items">展开</button>
+        </div>
+        <div class="collector-panel-body">
+            <div class="collector-toolbar">
+                <input id="collectorItemKeyword" placeholder="按标题、摘要或链接搜索">
+                <select id="collectorItemStatus">
+                    <option value="">全部状态</option>
+                    <option value="new">new</option>
+                    <option value="reviewed">reviewed</option>
+                    <option value="ignored">ignored</option>
                 </select>
+                <button onclick="loadCollectorItems()">筛选</button>
             </div>
-            <div class="form-row">
-                <label>是否启用</label>
-                <select id="collectorEnabled">
-                    <option value="true">启用</option>
-                    <option value="false">停用</option>
-                </select>
+            <div id="collectorItemList" class="empty">正在加载采集条目...</div>
+            <div class="collector-collapse-row">
+                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-items">收起本区</button>
             </div>
         </div>
+    </div>
 
-        <div class="form-row">
-            <label>URL</label>
-            <div class="collector-url-row">
-                <input id="collectorUrl" placeholder="仅填写公开可访问的 RSS、JSON API 或 HTML 列表页 URL">
-                <button type="button" onclick="detectCollectorSource()">智能识别</button>
+    <div id="collector-section-runs" class="section collector-panel collector-section-collapsed" data-section-id="runs">
+        <div class="collector-panel-header">
+            <div>
+                <h2 id="collectorRunTitle">运行日志</h2>
+                <p>展开后查看最近运行记录。</p>
             </div>
-            <div id="collectorDetectMessage" class="message collector-detect-message"></div>
+            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-runs">展开</button>
         </div>
-
-        <div class="form-row">
-            <label>关键词</label>
-            <input id="collectorKeyword" placeholder="多个关键词用逗号分隔；留空时使用大学城相关默认关键词">
+        <div class="collector-panel-body">
+            <div id="collectorRunList" class="empty">正在加载运行日志...</div>
+            <div class="collector-collapse-row">
+                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-runs">收起本区</button>
+            </div>
         </div>
-
-        <div class="form-row">
-            <label>备注</label>
-            <textarea id="collectorNotes" placeholder="说明来源用途、公开性和人工确认情况"></textarea>
-        </div>
-
-        <button onclick="submitCollectorSource()">新增采集源</button>
-        <button style="margin-left: 8px;" onclick="runAllCollectorSources()">运行全部启用源</button>
-
-        <div id="collectorMessage" class="message"></div>
-    </div>
-
-    <div class="section">
-        <h2>采集源列表</h2>
-        <div id="collectorSourceList" class="empty">正在加载采集源...</div>
-    </div>
-
-    <div class="section">
-        <h2>采集条目</h2>
-        <div class="collector-toolbar">
-            <input id="collectorItemKeyword" placeholder="按标题、摘要或链接搜索">
-            <select id="collectorItemStatus">
-                <option value="">全部状态</option>
-                <option value="new">new</option>
-                <option value="reviewed">reviewed</option>
-                <option value="ignored">ignored</option>
-            </select>
-            <button onclick="loadCollectorItems()">筛选</button>
-        </div>
-        <div id="collectorItemList" class="empty">正在加载采集条目...</div>
-    </div>
-
-    <div class="section">
-        <h2>运行日志</h2>
-        <div id="collectorRunList" class="empty">正在加载运行日志...</div>
     </div>
 </div>
 
 <script src="app.js?v=9"></script>
-<script src="crawler-collector.js?v=1"></script>
+<script src="crawler-collector.js?v=20260612-manual-detect"></script>
 <script src="global-loader.js?v=61"></script>
 </body>
 </html>

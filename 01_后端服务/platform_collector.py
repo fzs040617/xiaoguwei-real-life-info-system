@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,8 @@ BASE_DIR = Path(__file__).resolve().parent
 COLLECTOR_DB_PATH = BASE_DIR / "collector_data.db"
 REQUEST_TIMEOUT_SECONDS = 10
 MAX_ITEMS_PER_SOURCE = 30
+MAX_HTML_SHALLOW_LINKS = 20
+REQUEST_DELAY_SECONDS = 0.15
 DETECT_KEYWORD_SUGGESTION = "小谷围 广州大学城 大学城 贝岗 南亭"
 
 DEFAULT_KEYWORDS = [
@@ -33,6 +36,29 @@ DEFAULT_KEYWORDS = [
 
 ALLOWED_SOURCE_TYPES = {"rss", "api", "public_html"}
 ALLOWED_ITEM_STATUSES = {"new", "reviewed", "ignored"}
+BLOCKED_PATH_KEYWORDS = {
+    "login",
+    "passport",
+    "account",
+    "user",
+    "cart",
+    "pay",
+    "order",
+    "admin",
+    "api",
+}
+BLOCKED_DOWNLOAD_EXTENSIONS = {
+    ".pdf",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".ppt",
+    ".pptx",
+    ".zip",
+    ".rar",
+    ".7z",
+}
 
 
 def now_text() -> str:
@@ -220,21 +246,36 @@ def update_source(source_id: int, data: Dict[str, Any]) -> Optional[Dict[str, An
 def keyword_list(keyword: Optional[str]) -> List[str]:
     text = (keyword or "").strip()
     if not text:
-        return DEFAULT_KEYWORDS
+        return []
     parts = []
-    for chunk in text.replace("，", ",").replace("、", ",").replace("\n", ",").split(","):
+    normalized = re.sub(r"[\s,，;；、]+", ",", text)
+    for chunk in normalized.split(","):
         item = chunk.strip()
         if item:
             parts.append(item)
-    return parts or DEFAULT_KEYWORDS
+    return parts
 
 
 def item_matches_keywords(item: Dict[str, Any], keywords: Iterable[str]) -> bool:
+    keyword_values = [keyword.lower() for keyword in keywords if str(keyword or "").strip()]
+    if not keyword_values:
+        return True
     combined = " ".join(
         str(item.get(key) or "")
         for key in ["title", "summary", "url", "raw_text"]
     ).lower()
-    return any(keyword.lower() in combined for keyword in keywords)
+    return any(keyword in combined for keyword in keyword_values)
+
+
+def matched_keywords_for_item(item: Dict[str, Any], keywords: Iterable[str]) -> List[str]:
+    keyword_values = [str(keyword or "").strip() for keyword in keywords if str(keyword or "").strip()]
+    if not keyword_values:
+        return []
+    combined = " ".join(
+        str(item.get(key) or "")
+        for key in ["title", "summary", "url", "raw_text"]
+    ).lower()
+    return [keyword for keyword in keyword_values if keyword.lower() in combined]
 
 
 def request_source(url: str) -> requests.Response:
@@ -263,6 +304,22 @@ def raw_hash_for(item: Dict[str, Any]) -> str:
         sort_keys=True,
     )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def item_already_exists(conn: sqlite3.Connection, item: Dict[str, Any]) -> bool:
+    raw_hash = item.get("raw_hash") or raw_hash_for(item)
+    url = safe_text(item.get("url"), 1000)
+    if url:
+        existed = conn.execute(
+            "SELECT id FROM collector_items WHERE url = ? OR raw_hash = ? LIMIT 1",
+            (url, raw_hash),
+        ).fetchone()
+    else:
+        existed = conn.execute(
+            "SELECT id FROM collector_items WHERE raw_hash = ? LIMIT 1",
+            (raw_hash,),
+        ).fetchone()
+    return existed is not None
 
 
 def parse_rss_or_atom(text: str, base_url: str) -> List[Dict[str, Any]]:
@@ -311,6 +368,88 @@ def strip_html(text: Any) -> str:
     if not raw:
         return ""
     return BeautifulSoup(raw, "html.parser").get_text(" ", strip=True)[:1000]
+
+
+def compact_text(parts: Iterable[Any], limit: int = 1000) -> str:
+    text = " ".join(safe_text(part, 500) for part in parts if safe_text(part, 500))
+    return re.sub(r"\s+", " ", text).strip()[:limit]
+
+
+def normalize_public_url(url: str, base_url: str = "") -> str:
+    value = urljoin(base_url, safe_text(url, 1000))
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return parsed._replace(fragment="").geturl()
+
+
+def is_safe_public_child_url(url: str, base_url: str) -> bool:
+    normalized = normalize_public_url(url, base_url)
+    if not normalized:
+        return False
+    parsed = urlparse(normalized)
+    base = urlparse(base_url)
+    if parsed.netloc.lower() != base.netloc.lower():
+        return False
+    lowered_path = parsed.path.lower()
+    if any(keyword in lowered_path for keyword in BLOCKED_PATH_KEYWORDS):
+        return False
+    if any(lowered_path.endswith(extension) for extension in BLOCKED_DOWNLOAD_EXTENSIONS):
+        return False
+    return True
+
+
+def prepare_html_soup(text: str) -> BeautifulSoup:
+    soup = BeautifulSoup(text, "html.parser")
+    for tag in soup(["script", "style", "noscript", "svg"]):
+        tag.extract()
+    return soup
+
+
+def html_page_item(text: str, page_url: str, fallback_title: str = "") -> Dict[str, Any]:
+    soup = prepare_html_soup(text)
+    title = title_from_html(text) or fallback_title or infer_platform_from_url(page_url)
+    description_tag = soup.find("meta", attrs={"name": re.compile("^description$", re.I)})
+    description = description_tag.get("content", "") if description_tag else ""
+    headings = [tag.get_text(" ", strip=True) for tag in soup.find_all(["h1", "h2", "h3"], limit=8)]
+    paragraphs = [tag.get_text(" ", strip=True) for tag in soup.find_all("p", limit=8)]
+    summary = compact_text([description, *headings, *paragraphs], 1000)
+    raw_text = compact_text([title, description, *headings, *paragraphs], 4000)
+    return {
+        "title": safe_text(title, 300) or "未命名采集条目",
+        "url": safe_text(page_url, 1000),
+        "summary": summary,
+        "published_at": "",
+        "raw_text": raw_text or summary,
+    }
+
+
+def html_link_candidates(text: str, base_url: str) -> List[Dict[str, str]]:
+    soup = prepare_html_soup(text)
+    candidates = []
+    seen_urls = set()
+    for anchor in soup.find_all("a", href=True):
+        title = anchor.get_text(" ", strip=True)
+        if not title or len(title) < 2:
+            continue
+        link = normalize_public_url(anchor["href"], base_url)
+        if not link or link in seen_urls:
+            continue
+        if not is_safe_public_child_url(link, base_url):
+            continue
+        seen_urls.add(link)
+        parent_text = anchor.parent.get_text(" ", strip=True) if anchor.parent else title
+        candidates.append(
+            {
+                "title": safe_text(title, 300),
+                "url": safe_text(link, 1000),
+                "summary": safe_text(parent_text, 1000),
+                "raw_text": safe_text(parent_text, 4000),
+            }
+        )
+        if len(candidates) >= MAX_HTML_SHALLOW_LINKS:
+            break
+    return candidates
 
 
 def response_charset_from_header(response: requests.Response) -> str:
@@ -580,45 +719,47 @@ def first_present(record: Dict[str, Any], keys: List[str]) -> Any:
     return ""
 
 
-def parse_public_html(text: str, base_url: str) -> List[Dict[str, Any]]:
-    soup = BeautifulSoup(text, "html.parser")
-    for tag in soup(["script", "style", "noscript"]):
-        tag.extract()
+def parse_public_html(text: str, base_url: str, shallow_fetch: bool = True) -> List[Dict[str, Any]]:
+    items = [html_page_item(text, base_url)]
+    seen_urls = {base_url}
+    candidates = html_link_candidates(text, base_url)
 
-    items = []
-    seen_urls = set()
-    for anchor in soup.find_all("a", href=True):
-        title = anchor.get_text(" ", strip=True)
-        if not title or len(title) < 2:
-            continue
-        link = urljoin(base_url, anchor["href"])
+    for candidate in candidates:
+        if len(items) >= MAX_ITEMS_PER_SOURCE:
+            break
+        link = candidate["url"]
         if link in seen_urls:
             continue
         seen_urls.add(link)
-        parent_text = anchor.parent.get_text(" ", strip=True) if anchor.parent else title
-        items.append(
-            {
-                "title": safe_text(title, 300),
-                "url": safe_text(link, 1000),
-                "summary": safe_text(parent_text, 1000),
-                "published_at": "",
-                "raw_text": safe_text(parent_text, 4000),
-            }
-        )
-        if len(items) >= MAX_ITEMS_PER_SOURCE:
-            break
-    return items
+
+        if not shallow_fetch:
+            items.append(candidate)
+            continue
+
+        try:
+            time.sleep(REQUEST_DELAY_SECONDS)
+            response = request_source(link)
+            content_type = response.headers.get("content-type", "").lower()
+            if "html" not in content_type and "<html" not in decode_response_text(response)[:1000].lower():
+                continue
+            detail_text = decode_response_text(response)
+            items.append(html_page_item(detail_text, link, candidate.get("title", "")))
+        except requests.exceptions.RequestException:
+            continue
+
+    return items[:MAX_ITEMS_PER_SOURCE]
 
 
 def fetch_source_items(source: Dict[str, Any]) -> List[Dict[str, Any]]:
     response = request_source(source["url"])
     source_type = source["source_type"]
+    text = decode_response_text(response)
     if source_type == "rss":
-        return parse_rss_or_atom(response.text, source["url"])
+        return parse_rss_or_atom(text, source["url"])
     if source_type == "api":
-        return parse_json_api(response.text, source["url"])
+        return parse_json_api(text, source["url"])
     if source_type == "public_html":
-        return parse_public_html(response.text, source["url"])
+        return parse_public_html(text, source["url"])
     raise ValueError("unsupported source_type")
 
 
@@ -629,6 +770,8 @@ def save_items(source: Dict[str, Any], items: List[Dict[str, Any]]) -> int:
 
     with get_connection() as conn:
         for item in items:
+            if inserted >= MAX_ITEMS_PER_SOURCE:
+                break
             if not item_matches_keywords(item, source_keywords):
                 continue
             item["raw_hash"] = raw_hash_for(item)
@@ -657,6 +800,136 @@ def save_items(source: Dict[str, Any], items: List[Dict[str, Any]]) -> int:
                 continue
         conn.commit()
     return inserted
+
+
+def preview_source(source_id: int) -> Dict[str, Any]:
+    init_collector_db()
+    source = get_source(source_id)
+    if not source:
+        raise ValueError("collector source not found")
+
+    try:
+        items = fetch_source_items(source)
+    except requests.exceptions.Timeout:
+        return {
+            "source": source,
+            "candidates_count": 0,
+            "matched_count": 0,
+            "reason": "网络超时",
+            "data": [],
+        }
+    except Exception as exc:
+        return {
+            "source": source,
+            "candidates_count": 0,
+            "matched_count": 0,
+            "reason": preview_failure_reason(str(exc), source.get("source_type", "")),
+            "data": [],
+        }
+
+    keywords = keyword_list(source.get("keyword"))
+    preview_items = []
+    matched_count = 0
+
+    with get_connection() as conn:
+        for item in items:
+            matched_keywords = matched_keywords_for_item(item, keywords)
+            matched = item_matches_keywords(item, keywords)
+            if matched:
+                matched_count += 1
+            item["raw_hash"] = raw_hash_for(item)
+            if len(preview_items) >= 10:
+                continue
+            preview_items.append(
+                {
+                    "title": safe_text(item.get("title"), 300),
+                    "url": safe_text(item.get("url"), 1000),
+                    "summary": safe_text(item.get("summary"), 1000),
+                    "matched_keywords": matched_keywords,
+                    "would_save": bool(matched and not item_already_exists(conn, item)),
+                }
+            )
+
+    return {
+        "source": source,
+        "candidates_count": len(items),
+        "matched_count": matched_count,
+        "reason": preview_reason(len(items), matched_count, source.get("source_type", "")),
+        "data": preview_items,
+    }
+
+
+def preview_reason(candidates_count: int, matched_count: int, source_type: str) -> str:
+    if candidates_count <= 0:
+        if source_type == "public_html":
+            return "页面无可解析链接，或页面需要 JS 动态加载"
+        return "未解析到公开结果"
+    if matched_count <= 0:
+        return "未命中关键词"
+    return "已解析到可预览结果"
+
+
+def preview_failure_reason(error_message: str, source_type: str) -> str:
+    message = safe_text(error_message, 300).lower()
+    if "timeout" in message or "timed out" in message:
+        return "网络超时"
+    if source_type not in ALLOWED_SOURCE_TYPES:
+        return "源类型暂不支持预览"
+    if "json" in message:
+        return "公开 JSON API 内容格式不可解析"
+    return "页面需要 JS 动态加载、网络不可达或内容格式暂不可解析"
+
+
+def create_manual_item(data: Dict[str, Any]) -> Dict[str, Any]:
+    init_collector_db()
+    title = safe_text(data.get("title"), 300)
+    if not title:
+        raise ValueError("标题不能为空")
+
+    platform = safe_text(data.get("platform"), 120) or "人工导入"
+    url = safe_text(data.get("url"), 1000)
+    summary = safe_text(data.get("summary"), 1000)
+    notes = safe_text(data.get("notes"), 1000)
+    raw_text = compact_text([summary, notes], 4000)
+    fetched_at = now_text()
+    item = {
+        "title": title,
+        "url": url,
+        "summary": summary,
+        "published_at": "",
+    }
+    raw_hash = raw_hash_for(item)
+
+    with get_connection() as conn:
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO collector_items
+                (source_id, platform, title, url, summary, published_at, fetched_at, raw_hash, raw_json, raw_text, status)
+                VALUES (NULL, ?, ?, ?, ?, '', ?, ?, NULL, ?, 'new')
+                """,
+                (
+                    platform,
+                    title,
+                    url,
+                    summary,
+                    fetched_at,
+                    raw_hash,
+                    raw_text,
+                ),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            existed = conn.execute(
+                "SELECT * FROM collector_items WHERE raw_hash = ? OR (url = ? AND ? != '') LIMIT 1",
+                (raw_hash, url, url),
+            ).fetchone()
+            if existed:
+                return row_to_dict(existed)
+            raise
+        item_id = cursor.lastrowid
+        row = conn.execute("SELECT * FROM collector_items WHERE id = ?", (item_id,)).fetchone()
+    return row_to_dict(row) if row else {}
 
 
 def record_run(source_id: Optional[int], status: str, started_at: str, item_count: int, error_message: str = "") -> Dict[str, Any]:

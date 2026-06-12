@@ -389,6 +389,62 @@ button:hover {
     gap: 12px;
 }
 
+.collector-panel {
+    overflow: hidden;
+}
+
+.collector-panel-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.collector-panel-header h2 {
+    margin: 0 0 4px;
+}
+
+.collector-panel-header p {
+    color: #586660;
+    font-size: 14px;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.collector-section-collapsed .collector-panel-body {
+    display: none;
+}
+
+.collector-collapse-row {
+    bottom: 14px;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+    pointer-events: none;
+    position: sticky;
+    z-index: 2;
+}
+
+.collector-collapse-floating {
+    background: #275d43;
+    border: 0;
+    border-radius: 6px;
+    box-shadow: 0 8px 18px rgba(31, 63, 49, 0.18);
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 10px 14px;
+    pointer-events: auto;
+}
+
+.collector-source-collapse-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 12px;
+}
+
 .collector-toolbar {
     display: grid;
     grid-template-columns: minmax(220px, 1fr) 170px auto;
@@ -409,6 +465,134 @@ button:hover {
     min-height: 20px;
 }
 
+.collector-template-box {
+    border: 1px solid #dcece4;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 14px 0;
+    background: #f8fbf9;
+}
+
+.collector-template-box h3 {
+    margin: 0 0 10px;
+    font-size: 16px;
+}
+
+.collector-template-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.collector-template-button {
+    margin: 0;
+}
+
+.collector-preview-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.collector-preview-item {
+    margin-bottom: 10px;
+}
+
+.collector-preview-detail {
+    margin-top: 10px;
+}
+
+.collector-inline-preview {
+    margin-top: 12px;
+    border-top: 1px solid #dcece4;
+    padding-top: 12px;
+}
+
+.collector-inline-preview:empty {
+    display: none;
+}
+
+.collector-inline-preview .empty {
+    margin: 0;
+}
+
+.collector-manual-section {
+    border: 2px solid #d8e7f3;
+    background: #f8fbfd;
+}
+
+.collector-manual-section h2 {
+    color: #1f5f8f;
+}
+
+.collector-source-item {
+    padding: 12px;
+}
+
+.collector-source-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.collector-source-main {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+}
+
+.collector-source-platform {
+    color: #586660;
+    font-size: 14px;
+}
+
+.collector-source-url {
+    color: #6a756f;
+    font-size: 13px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.collector-source-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.collector-source-details {
+    border-top: 1px solid #edf0f2;
+    color: #3f4b45;
+    line-height: 1.7;
+    margin-top: 10px;
+    padding-top: 10px;
+}
+
+.collector-manual-grid {
+    grid-template-columns: minmax(160px, 180px) minmax(220px, 1fr) minmax(220px, 1fr);
+}
+
+.collector-manual-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.field-hint {
+    color: #66756d;
+    font-size: 13px;
+    line-height: 1.6;
+    margin: 6px 0 0;
+}
+
 .collector-page .summary {
     max-height: 120px;
     overflow: auto;
@@ -417,8 +601,30 @@ button:hover {
 @media (max-width: 900px) {
     .collector-form-grid,
     .collector-toolbar,
+    .collector-manual-grid,
     .collector-url-row {
         grid-template-columns: 1fr;
+    }
+
+    .collector-panel-header,
+    .collector-source-summary {
+        grid-template-columns: 1fr;
+        flex-direction: column;
+    }
+
+    .collector-source-actions {
+        justify-content: flex-start;
+    }
+
+    .collector-collapse-row,
+    .collector-source-collapse-row {
+        justify-content: stretch;
+        position: static;
+    }
+
+    .collector-collapse-floating,
+    .collector-source-collapse-row .small-button {
+        width: 100%;
     }
 }
 
