@@ -4,6 +4,8 @@ const COLLECTOR_NETWORK_MESSAGE = "无法连接后端，请确认 http://127.0.0
 let collectorLastAutoKeyword = "";
 let collectorPreviewDocumentEventsBound = false;
 const collectorExpandedSources = new Set();
+const collectorLatestRunsBySource = new Map();
+let collectorCurrentRunFilter = null;
 const COLLECTOR_SOURCE_TEMPLATES = [
     {
         name: "小谷围街道概况页",
@@ -189,6 +191,8 @@ function handleCollectorPageClick(event) {
     handleCollectorManualImportClick(event);
     handleCollectorSourceCollapseClick(event);
     handleCollectorSourceDetailClick(event);
+    handleCollectorSourceRunsClick(event);
+    handleCollectorAllRunsClick(event);
     handleCollectorPreviewDetailCollapseClick(event);
     handleCollectorPreviewDetailClick(event);
     handleCollectorPreviewClick(event);
@@ -294,6 +298,33 @@ function handleCollectorSourceDetailClick(event) {
     const sourceId = Number(btn.dataset.sourceId || 0);
     if (!sourceId) return;
     toggleCollectorSourceDetail(sourceId);
+}
+
+function handleCollectorSourceRunsClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="view-source-runs"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const sourceId = Number(btn.dataset.sourceId || 0);
+    if (!sourceId) {
+        collectorMessage("查看该源日志失败：缺少采集源 ID", true);
+        return;
+    }
+    viewCollectorRunsForSource(sourceId, btn.dataset.sourceName || "");
+}
+
+function handleCollectorAllRunsClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="view-all-runs"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    loadCollectorRuns();
 }
 
 function handleCollectorPreviewDetailCollapseClick(event) {
@@ -467,8 +498,14 @@ async function loadCollectorSources() {
     box.innerHTML = `<div class="empty">正在加载采集源...</div>`;
 
     try {
-        const data = await collectorRequest(`/collector-admin/sources?token=${encodeURIComponent(collectorToken())}`);
-        renderCollectorSources(data.data || []);
+        const sourceData = await collectorRequest(`/collector-admin/sources?token=${encodeURIComponent(collectorToken())}`);
+        try {
+            const runData = await fetchCollectorRuns();
+            updateCollectorLatestRuns(runData.data || []);
+        } catch (runError) {
+            collectorLatestRunsBySource.clear();
+        }
+        renderCollectorSources(sourceData.data || []);
     } catch (error) {
         box.innerHTML = `<div class="empty">采集源加载失败：${collectorEscapeHtml(collectorErrorMessage(error))}</div>`;
     }
@@ -646,7 +683,9 @@ async function runCollectorSource(sourceId) {
         });
         const run = data.result && data.result.run ? data.result.run : {};
         collectorMessage(`采集完成：状态 ${run.status || "-"}，新增 ${run.item_count ?? 0} 条。`);
+        expandCollectorSourceDetail(sourceId);
         await Promise.all([loadCollectorSources(), loadCollectorItems(), loadCollectorRuns()]);
+        scrollCollectorSourceSummaryIntoView(sourceId);
     } catch (error) {
         collectorMessage(`运行失败：${collectorErrorMessage(error)}`, true);
         await loadCollectorRuns();
@@ -813,6 +852,7 @@ function renderCollectorSources(sources) {
                     <strong>${collectorEscapeHtml(source.name || "未命名采集源")}</strong>
                     <span class="collector-source-platform">${collectorEscapeHtml(source.platform || "未填写平台")}</span>
                     <span class="collector-source-url">${collectorEscapeHtml(shortCollectorUrl(source.url || ""))}</span>
+                    ${renderCollectorSourceRunBadge(source)}
                 </div>
                 <div class="collector-source-actions">
                     <button type="button" class="small-button" data-action="toggle-source-detail" data-source-id="${collectorEscapeAttribute(source.id)}">${collectorExpandedSources.has(Number(source.id)) ? "收起" : "展开"}</button>
@@ -824,15 +864,80 @@ function renderCollectorSources(sources) {
             <div class="collector-source-details" ${collectorExpandedSources.has(Number(source.id)) ? "" : "hidden"}>
                 <div>关键词：${collectorEscapeHtml(source.keyword || "空关键词：不过滤公开结果")}</div>
                 <div>备注：${collectorEscapeHtml(source.notes || "暂无备注")}</div>
-                <div>最近运行：${collectorEscapeHtml(source.last_run_at || "尚未运行")}</div>
+                ${renderCollectorSourceRunSummary(source)}
                 <div class="target-url">完整 URL：${collectorEscapeHtml(source.url || "")}</div>
                 <div class="collector-inline-preview" id="collector-preview-inline-${collectorEscapeAttribute(source.id)}"></div>
                 <div class="collector-source-collapse-row">
+                    <button type="button" class="small-button btn-secondary" data-action="view-source-runs" data-source-id="${collectorEscapeAttribute(source.id)}" data-source-name="${collectorEscapeAttribute(source.name || "未命名采集源")}">查看该源日志</button>
                     <button type="button" class="small-button" data-action="collapse-source-detail" data-source-id="${collectorEscapeAttribute(source.id)}">收起该源</button>
                 </div>
             </div>
         </div>
     `).join("");
+}
+
+function renderCollectorSourceRunSummary(source) {
+    const sourceId = Number(source && source.id ? source.id : 0);
+    const latestRun = collectorLatestRunsBySource.get(sourceId);
+    if (!latestRun) {
+        return `
+            <div class="collector-run-summary collector-run-summary-none">
+                <span class="collector-run-status collector-run-status-none">暂无运行记录</span>
+                <span>最近运行：暂无记录</span>
+            </div>
+        `;
+    }
+
+    const status = String(latestRun.status || "unknown").trim() || "unknown";
+    const statusLabel = collectorRunStatusLabel(status);
+    const statusClass = collectorRunStatusClass(status);
+    const itemCount = latestRun.item_count ?? 0;
+    const finishedAt = latestRun.finished_at || latestRun.started_at || source.last_run_at || "-";
+    const errorText = compactCollectorRunError(latestRun.error_message || "");
+
+    return `
+        <div class="collector-run-summary collector-run-summary-${collectorEscapeAttribute(statusClass)}">
+            <span class="collector-run-status collector-run-status-${collectorEscapeAttribute(statusClass)}">${collectorEscapeHtml(statusLabel)}</span>
+            <span>新增 ${collectorEscapeHtml(String(itemCount))} 条</span>
+            <span>结束时间 ${collectorEscapeHtml(finishedAt)}</span>
+            ${errorText ? `<span class="collector-run-error">错误原因：${collectorEscapeHtml(errorText)}</span>` : ""}
+        </div>
+    `;
+}
+
+function renderCollectorSourceRunBadge(source) {
+    const sourceId = Number(source && source.id ? source.id : 0);
+    const latestRun = collectorLatestRunsBySource.get(sourceId);
+    if (!latestRun) {
+        return `<span class="collector-run-status collector-run-status-none">暂无运行记录</span>`;
+    }
+    const status = String(latestRun.status || "unknown").trim() || "unknown";
+    const statusLabel = status === "success"
+        ? `成功 / 新增 ${latestRun.item_count ?? 0}`
+        : status === "failed"
+            ? "失败"
+            : collectorRunStatusLabel(status).replace("最近运行：", "");
+    return `<span class="collector-run-status collector-run-status-${collectorEscapeAttribute(collectorRunStatusClass(status))}">${collectorEscapeHtml(statusLabel)}</span>`;
+}
+
+function collectorRunStatusLabel(status) {
+    if (status === "success") return "最近运行：成功";
+    if (status === "failed") return "最近运行：失败";
+    if (status === "skipped") return "最近运行：已跳过";
+    return `最近运行：${status || "未知"}`;
+}
+
+function collectorRunStatusClass(status) {
+    if (status === "success") return "success";
+    if (status === "failed") return "failed";
+    if (status === "skipped") return "skipped";
+    return "unknown";
+}
+
+function compactCollectorRunError(errorMessage) {
+    const value = String(errorMessage || "").replace(/\s+/g, " ").trim();
+    if (value.length <= 90) return value;
+    return `${value.slice(0, 90)}...`;
 }
 
 function updateCollectorSourceTitle(count) {
@@ -1051,15 +1156,50 @@ function renderCollectorItemActions(item) {
     return "";
 }
 
-async function loadCollectorRuns() {
+async function fetchCollectorRuns(sourceId = null) {
+    const query = new URLSearchParams({
+        token: collectorToken(),
+        limit: "50",
+        offset: "0"
+    });
+    if (sourceId) {
+        query.set("source_id", String(sourceId));
+    }
+    return collectorRequest(`/collector-admin/runs?${query.toString()}`);
+}
+
+function updateCollectorLatestRuns(runs) {
+    collectorLatestRunsBySource.clear();
+    (runs || []).forEach(run => {
+        const sourceId = Number(run.source_id || 0);
+        if (!sourceId || collectorLatestRunsBySource.has(sourceId)) return;
+        collectorLatestRunsBySource.set(sourceId, run);
+    });
+}
+
+async function viewCollectorRunsForSource(sourceId, sourceName = "") {
+    collectorCurrentRunFilter = {
+        sourceId: Number(sourceId),
+        sourceName: sourceName || `采集源 #${sourceId}`
+    };
+    expandCollectorSection("collector-section-runs");
+    await loadCollectorRuns(collectorCurrentRunFilter.sourceId, collectorCurrentRunFilter.sourceName);
+    scrollCollectorSectionHeaderIntoView("collector-section-runs");
+}
+
+async function loadCollectorRuns(sourceId = null, sourceName = "") {
     const box = document.getElementById("collectorRunList");
     if (!box) return;
     box.innerHTML = `<div class="empty">正在加载运行日志...</div>`;
 
     try {
-        const data = await collectorRequest(`/collector-admin/runs?token=${encodeURIComponent(collectorToken())}&limit=50&offset=0`);
+        const data = await fetchCollectorRuns(sourceId);
+        if (!sourceId) {
+            collectorCurrentRunFilter = null;
+            updateCollectorLatestRuns(data.data || []);
+        }
         updateCollectorRunTitle((data.data || []).length);
-        renderCollectorRuns(data.data || []);
+        renderCollectorRuns(data.data || [], sourceId ? {sourceId, sourceName} : null);
     } catch (error) {
         box.innerHTML = `<div class="empty">运行日志加载失败：${collectorEscapeHtml(collectorErrorMessage(error))}</div>`;
     }
@@ -1079,16 +1219,23 @@ function updateCollectorRunTitle(count) {
     }
 }
 
-function renderCollectorRuns(runs) {
+function renderCollectorRuns(runs, filter = null) {
     const box = document.getElementById("collectorRunList");
     if (!box) return;
+    const filterHeader = filter ? `
+        <div class="collector-run-filter-note">
+            <span>正在查看：${collectorEscapeHtml(filter.sourceName || `采集源 #${filter.sourceId}`)} 的运行日志</span>
+            <button type="button" class="small-button btn-secondary" data-action="view-all-runs">查看全部运行日志</button>
+        </div>
+    ` : "";
 
     if (!runs.length) {
-        box.innerHTML = `<div class="empty">暂无运行日志。</div>`;
+        box.innerHTML = `${filterHeader}<div class="empty">暂无运行日志。</div>`;
         return;
     }
 
     box.innerHTML = `
+        ${filterHeader}
         <div class="user-admin-table-wrap">
             <table class="user-admin-table">
                 <thead>
