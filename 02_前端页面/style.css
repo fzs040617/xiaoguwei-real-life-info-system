@@ -567,6 +567,28 @@ button:hover {
     justify-content: flex-end;
 }
 
+.collector-source-filter-row {
+    grid-template-columns: minmax(220px, 1fr) minmax(130px, 150px) minmax(150px, 170px) minmax(130px, 150px) auto auto auto;
+    margin-bottom: 8px;
+}
+
+.collector-source-filter-summary {
+    color: #607069;
+    font-size: 13px;
+    margin: 0 0 12px;
+}
+
+.collector-filter-active {
+    box-shadow: 0 0 0 2px rgba(211, 84, 0, 0.18);
+}
+
+.collector-source-empty {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
 .collector-source-details {
     border-top: 1px solid #edf0f2;
     color: #3f4b45;
@@ -710,6 +732,7 @@ button:hover {
 @media (max-width: 900px) {
     .collector-form-grid,
     .collector-toolbar,
+    .collector-source-filter-row,
     .collector-manual-grid,
     .collector-url-row {
         grid-template-columns: 1fr;

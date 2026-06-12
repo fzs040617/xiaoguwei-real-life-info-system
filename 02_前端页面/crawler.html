@@ -175,6 +175,31 @@
             <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-sources">展开</button>
         </div>
         <div class="collector-panel-body">
+            <div class="collector-toolbar collector-source-filter-row">
+                <input id="collectorSourceKeyword" placeholder="搜索名称、平台、URL、备注、关键词">
+                <select id="collectorSourceEnabledFilter">
+                    <option value="all">全部启用状态</option>
+                    <option value="enabled">启用中</option>
+                    <option value="disabled">已停用</option>
+                </select>
+                <select id="collectorSourceRunFilter">
+                    <option value="all">全部运行状态</option>
+                    <option value="success">最近成功</option>
+                    <option value="failed">最近失败</option>
+                    <option value="none">暂无运行记录</option>
+                    <option value="skipped">已跳过</option>
+                </select>
+                <select id="collectorSourceTypeFilter">
+                    <option value="all">全部类型</option>
+                    <option value="rss">RSS</option>
+                    <option value="public_html">public_html</option>
+                    <option value="api">json_api / api</option>
+                </select>
+                <button type="button" class="small-button" data-action="filter-sources">筛选</button>
+                <button type="button" class="small-button warn-button" data-action="problem-sources">只看异常源</button>
+                <button type="button" class="small-button btn-secondary" data-action="clear-source-filters">清除筛选</button>
+            </div>
+            <div id="collectorSourceFilterSummary" class="collector-source-filter-summary">显示全部采集源</div>
             <div id="collectorSourceList" class="empty">正在加载采集源...</div>
             <div class="collector-collapse-row">
                 <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-sources">收起本区</button>

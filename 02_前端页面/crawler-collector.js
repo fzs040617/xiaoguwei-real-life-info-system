@@ -5,6 +5,8 @@ let collectorLastAutoKeyword = "";
 let collectorPreviewDocumentEventsBound = false;
 const collectorExpandedSources = new Set();
 const collectorLatestRunsBySource = new Map();
+let collectorAllSources = [];
+let collectorProblemSourceFilterActive = false;
 let collectorCurrentRunFilter = null;
 const COLLECTOR_SOURCE_TEMPLATES = [
     {
@@ -161,6 +163,7 @@ async function initCollectorPage() {
             collectorDetectMessage(urlInput.value.trim() ? "URL 已修改，请重新智能识别。" : "");
         });
     }
+    setupCollectorSourceFilters();
     await Promise.all([
         loadCollectorSources(),
         loadCollectorItems(),
@@ -191,11 +194,35 @@ function handleCollectorPageClick(event) {
     handleCollectorManualImportClick(event);
     handleCollectorSourceCollapseClick(event);
     handleCollectorSourceDetailClick(event);
+    handleCollectorSourceFilterClick(event);
+    handleCollectorSourceProblemClick(event);
+    handleCollectorSourceClearFilterClick(event);
     handleCollectorSourceRunsClick(event);
     handleCollectorAllRunsClick(event);
     handleCollectorPreviewDetailCollapseClick(event);
     handleCollectorPreviewDetailClick(event);
     handleCollectorPreviewClick(event);
+}
+
+function setupCollectorSourceFilters() {
+    ["collectorSourceKeyword", "collectorSourceEnabledFilter", "collectorSourceRunFilter", "collectorSourceTypeFilter"].forEach(id => {
+        const input = document.getElementById(id);
+        if (!input || input.dataset.collectorFilterReady === "true") return;
+        input.dataset.collectorFilterReady = "true";
+        input.addEventListener("change", () => {
+            collectorProblemSourceFilterActive = false;
+            applyCollectorSourceFilters();
+        });
+        if (id === "collectorSourceKeyword") {
+            input.addEventListener("keydown", event => {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    collectorProblemSourceFilterActive = false;
+                    applyCollectorSourceFilters();
+                }
+            });
+        }
+    });
 }
 
 function handleCollectorSectionCollapseClick(event) {
@@ -298,6 +325,40 @@ function handleCollectorSourceDetailClick(event) {
     const sourceId = Number(btn.dataset.sourceId || 0);
     if (!sourceId) return;
     toggleCollectorSourceDetail(sourceId);
+}
+
+function handleCollectorSourceFilterClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="filter-sources"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    collectorProblemSourceFilterActive = false;
+    applyCollectorSourceFilters();
+}
+
+function handleCollectorSourceProblemClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="problem-sources"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    showCollectorProblemSources();
+}
+
+function handleCollectorSourceClearFilterClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="clear-source-filters"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    clearCollectorSourceFilters();
 }
 
 function handleCollectorSourceRunsClick(event) {
@@ -505,7 +566,8 @@ async function loadCollectorSources() {
         } catch (runError) {
             collectorLatestRunsBySource.clear();
         }
-        renderCollectorSources(sourceData.data || []);
+        collectorAllSources = sourceData.data || [];
+        applyCollectorSourceFilters();
     } catch (error) {
         box.innerHTML = `<div class="empty">采集源加载失败：${collectorEscapeHtml(collectorErrorMessage(error))}</div>`;
     }
@@ -833,13 +895,122 @@ async function submitManualCollectorItem() {
     }
 }
 
-function renderCollectorSources(sources) {
+function getCollectorSourceFilterState() {
+    return {
+        keyword: (document.getElementById("collectorSourceKeyword")?.value || "").trim().toLowerCase(),
+        enabled: document.getElementById("collectorSourceEnabledFilter")?.value || "all",
+        runStatus: document.getElementById("collectorSourceRunFilter")?.value || "all",
+        sourceType: document.getElementById("collectorSourceTypeFilter")?.value || "all",
+        problemOnly: collectorProblemSourceFilterActive
+    };
+}
+
+function collectorSourceMatchesKeyword(source, keyword) {
+    if (!keyword) return true;
+    const combined = [
+        source.name,
+        source.platform,
+        source.url,
+        source.notes,
+        source.keyword,
+        source.source_type
+    ].map(value => String(value || "").toLowerCase()).join(" ");
+    return combined.includes(keyword);
+}
+
+function collectorSourceMatchesEnabled(source, enabledFilter) {
+    if (!enabledFilter || enabledFilter === "all") return true;
+    if (enabledFilter === "enabled") return Boolean(source.enabled);
+    if (enabledFilter === "disabled") return !source.enabled;
+    return true;
+}
+
+function collectorSourceMatchesType(source, typeFilter) {
+    if (!typeFilter || typeFilter === "all") return true;
+    const sourceType = String(source.source_type || "").trim();
+    if (typeFilter === "api") return sourceType === "api" || sourceType === "json_api";
+    return sourceType === typeFilter;
+}
+
+function collectorSourceLatestRunStatus(source) {
+    const latestRun = collectorLatestRunsBySource.get(Number(source.id || 0));
+    return latestRun ? String(latestRun.status || "unknown").trim() || "unknown" : "none";
+}
+
+function collectorSourceMatchesRunStatus(source, runStatusFilter) {
+    if (!runStatusFilter || runStatusFilter === "all") return true;
+    return collectorSourceLatestRunStatus(source) === runStatusFilter;
+}
+
+function collectorSourceIsProblem(source) {
+    const status = collectorSourceLatestRunStatus(source);
+    return status === "failed" || (Boolean(source.enabled) && status === "none");
+}
+
+function applyCollectorSourceFilters() {
+    const state = getCollectorSourceFilterState();
+    const filteredSources = collectorAllSources.filter(source => (
+        collectorSourceMatchesKeyword(source, state.keyword) &&
+        collectorSourceMatchesEnabled(source, state.enabled) &&
+        collectorSourceMatchesType(source, state.sourceType) &&
+        collectorSourceMatchesRunStatus(source, state.runStatus) &&
+        (!state.problemOnly || collectorSourceIsProblem(source))
+    ));
+    renderCollectorSources(filteredSources, collectorAllSources.length, state);
+}
+
+function clearCollectorSourceFilters() {
+    const keywordInput = document.getElementById("collectorSourceKeyword");
+    const enabledInput = document.getElementById("collectorSourceEnabledFilter");
+    const runInput = document.getElementById("collectorSourceRunFilter");
+    const typeInput = document.getElementById("collectorSourceTypeFilter");
+    if (keywordInput) keywordInput.value = "";
+    if (enabledInput) enabledInput.value = "all";
+    if (runInput) runInput.value = "all";
+    if (typeInput) typeInput.value = "all";
+    collectorProblemSourceFilterActive = false;
+    applyCollectorSourceFilters();
+}
+
+function showCollectorProblemSources() {
+    collectorProblemSourceFilterActive = true;
+    applyCollectorSourceFilters();
+}
+
+function renderCollectorSourceFilterSummary(shownCount, totalCount, state) {
+    const box = document.getElementById("collectorSourceFilterSummary");
+    if (!box) return;
+    const activeParts = [];
+    if (state.keyword) activeParts.push(`搜索“${state.keyword}”`);
+    if (state.enabled !== "all") activeParts.push(state.enabled === "enabled" ? "启用中" : "已停用");
+    if (state.runStatus !== "all") activeParts.push({
+        success: "最近成功",
+        failed: "最近失败",
+        none: "暂无运行记录",
+        skipped: "已跳过"
+    }[state.runStatus] || state.runStatus);
+    if (state.sourceType !== "all") activeParts.push(state.sourceType === "api" ? "json_api / api" : state.sourceType);
+    if (state.problemOnly) activeParts.push("只看异常源");
+    box.textContent = `显示 ${shownCount} / 共 ${totalCount} 个${activeParts.length ? `；当前筛选：${activeParts.join("、")}` : ""}`;
+}
+
+function renderCollectorSources(sources, totalCount = sources.length, filterState = getCollectorSourceFilterState()) {
     const box = document.getElementById("collectorSourceList");
     if (!box) return;
-    updateCollectorSourceTitle(sources.length);
+    updateCollectorSourceTitle(sources.length, totalCount);
+    renderCollectorSourceFilterSummary(sources.length, totalCount, filterState);
+    const problemButton = document.querySelector('[data-action="problem-sources"]');
+    if (problemButton) {
+        problemButton.classList.toggle("collector-filter-active", Boolean(filterState.problemOnly));
+    }
 
     if (!sources.length) {
-        box.innerHTML = `<div class="empty">暂无采集源。请新增公开 RSS、公开 API 或公开 HTML 列表页。</div>`;
+        box.innerHTML = `
+            <div class="empty collector-source-empty">
+                没有符合筛选条件的采集源。
+                <button type="button" class="small-button btn-secondary" data-action="clear-source-filters">清除筛选查看全部</button>
+            </div>
+        `;
         return;
     }
 
@@ -940,10 +1111,12 @@ function compactCollectorRunError(errorMessage) {
     return `${value.slice(0, 90)}...`;
 }
 
-function updateCollectorSourceTitle(count) {
+function updateCollectorSourceTitle(count, totalCount = count) {
     const title = document.getElementById("collectorSourceTitle");
     if (title) {
-        title.textContent = `采集源列表（共 ${count} 个）`;
+        title.textContent = count === totalCount
+            ? `采集源列表（共 ${totalCount} 个）`
+            : `采集源列表（显示 ${count} / 共 ${totalCount} 个）`;
     }
 }
 
