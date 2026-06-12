@@ -143,6 +143,8 @@ function bindCollectorPreviewDocumentEvents() {
 function handleCollectorPageClick(event) {
     handleCollectorSectionCollapseClick(event);
     handleCollectorSectionToggleClick(event);
+    handleCollectorItemToClueClick(event);
+    handleCollectorItemIgnoreClick(event);
     handleCollectorManualDetectClick(event);
     handleCollectorManualImportClick(event);
     handleCollectorSourceCollapseClick(event);
@@ -172,6 +174,38 @@ function handleCollectorSectionToggleClick(event) {
     event.stopPropagation();
 
     toggleCollectorSection(btn.dataset.target);
+}
+
+function handleCollectorItemToClueClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="collector-item-to-clue"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const itemId = Number(btn.dataset.itemId || 0);
+    if (!itemId) {
+        collectorMessage("转入线索库失败：缺少采集条目 ID", true);
+        return;
+    }
+    transferCollectorItemToClue(itemId, btn);
+}
+
+function handleCollectorItemIgnoreClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="collector-item-ignore"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const itemId = Number(btn.dataset.itemId || 0);
+    if (!itemId) {
+        collectorMessage("标记忽略失败：缺少采集条目 ID", true);
+        return;
+    }
+    ignoreCollectorItem(itemId, btn);
 }
 
 function handleCollectorManualImportClick(event) {
@@ -875,6 +909,64 @@ async function loadCollectorItems() {
     }
 }
 
+async function transferCollectorItemToClue(itemId, button) {
+    if (!window.confirm("确认将该采集条目转入线索库等待审核吗？")) {
+        return;
+    }
+
+    const originalText = button ? button.textContent : "";
+    if (button) {
+        button.disabled = true;
+        button.textContent = "处理中...";
+    }
+    collectorMessage("正在转入线索库...");
+
+    try {
+        await collectorRequest(`/collector-admin/items/${itemId}/to-clue`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({token: collectorToken()})
+        });
+        collectorMessage("已转入线索库，等待审核");
+        await loadCollectorItems();
+    } catch (error) {
+        collectorMessage(`转入线索库失败：${collectorErrorMessage(error)}`, true);
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText || "转入线索库";
+        }
+    }
+}
+
+async function ignoreCollectorItem(itemId, button) {
+    if (!window.confirm("确认将该采集条目标记为忽略吗？")) {
+        return;
+    }
+
+    const originalText = button ? button.textContent : "";
+    if (button) {
+        button.disabled = true;
+        button.textContent = "处理中...";
+    }
+    collectorMessage("正在标记忽略...");
+
+    try {
+        await collectorRequest(`/collector-admin/items/${itemId}/ignore`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({token: collectorToken()})
+        });
+        collectorMessage("已标记忽略");
+        await loadCollectorItems();
+    } catch (error) {
+        collectorMessage(`标记忽略失败：${collectorErrorMessage(error)}`, true);
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText || "忽略";
+        }
+    }
+}
+
 function renderCollectorItems(items) {
     const box = document.getElementById("collectorItemList");
     if (!box) return;
@@ -887,15 +979,36 @@ function renderCollectorItems(items) {
     box.innerHTML = items.map(item => `
         <div class="card">
             <div>
-                <span class="tag">${collectorEscapeHtml(item.status || "new")}</span>
+                <span class="tag collector-status-${collectorEscapeAttribute(item.status || "new")}">${collectorEscapeHtml(item.status || "new")}</span>
                 <span class="tag">${collectorEscapeHtml(item.platform || "未知平台")}</span>
                 <strong>${collectorEscapeHtml(item.title || "未命名条目")}</strong>
             </div>
             <div class="target-url">${item.url ? `<a href="${collectorEscapeAttribute(item.url)}" target="_blank" rel="noopener noreferrer">${collectorEscapeHtml(item.url)}</a>` : "无链接"}</div>
             <div class="summary">${collectorEscapeHtml(item.summary || "暂无摘要")}</div>
             <div class="notice">来源：${collectorEscapeHtml(item.source_name || String(item.source_id || "-"))} · 发布时间：${collectorEscapeHtml(item.published_at || "-")} · 抓取时间：${collectorEscapeHtml(item.fetched_at || "-")}</div>
+            ${renderCollectorItemActions(item)}
         </div>
     `).join("");
+}
+
+function renderCollectorItemActions(item) {
+    const status = item.status || "new";
+    const itemId = collectorEscapeAttribute(item.id);
+    if (status === "new") {
+        return `
+            <div class="collector-item-actions">
+                <button type="button" class="small-button verify-button" data-action="collector-item-to-clue" data-item-id="${itemId}">转入线索库</button>
+                <button type="button" class="small-button btn-secondary" data-action="collector-item-ignore" data-item-id="${itemId}">忽略</button>
+            </div>
+        `;
+    }
+    if (status === "reviewed") {
+        return `<div class="collector-item-status-note collector-status-reviewed">已转入线索库，等待审核</div>`;
+    }
+    if (status === "ignored") {
+        return `<div class="collector-item-status-note collector-status-ignored">已忽略</div>`;
+    }
+    return "";
 }
 
 async function loadCollectorRuns() {

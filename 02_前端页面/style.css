@@ -586,6 +586,31 @@ button:hover {
     margin-top: 12px;
 }
 
+.collector-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.collector-item-status-note {
+    border-radius: 6px;
+    display: inline-block;
+    font-size: 13px;
+    margin-top: 10px;
+    padding: 6px 10px;
+}
+
+.collector-status-reviewed {
+    background: #e8f5ee;
+    color: #1d6b43;
+}
+
+.collector-status-ignored {
+    background: #f2f3f5;
+    color: #65706a;
+}
+
 .field-hint {
     color: #66756d;
     font-size: 13px;

@@ -17,11 +17,14 @@ from platform_collector import (
     create_manual_item as collector_create_manual_item,
     create_source as collector_create_source,
     detect_source as collector_detect_source,
+    get_collector_item,
     get_source as collector_get_source,
     init_collector_db,
     list_items as collector_list_items,
     list_runs as collector_list_runs,
     list_sources as collector_list_sources,
+    mark_collector_item_ignored,
+    mark_collector_item_reviewed,
     preview_source as collector_preview_source,
     run_all_enabled_sources as collector_run_all_enabled_sources,
     run_source as collector_run_source,
@@ -497,6 +500,84 @@ def detect_manual_collector_item(
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         raise HTTPException(status_code=500, detail="人工导入智能识别失败，请检查输入后重试")
+
+
+@app.post("/collector-admin/items/{item_id}/to-clue")
+def collector_item_to_clue(
+    item_id: int,
+    request: AdminTokenRequest,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+
+    item = get_collector_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="采集条目不存在")
+
+    status = item.get("status") or "new"
+    if status != "new":
+        raise HTTPException(status_code=400, detail="该条目已处理，不能重复转入线索库")
+
+    title = (item.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="采集条目标题为空，不能转入线索库")
+
+    new_clue = Clue(
+        title=title,
+        category="外部线索",
+        source_platform=(item.get("platform") or item.get("source_name") or "外部平台采集"),
+        source_url=item.get("url") or "",
+        summary=item.get("summary") or "",
+        status="待核验",
+    )
+
+    try:
+        db.add(new_clue)
+        db.commit()
+        db.refresh(new_clue)
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="创建线索失败，采集条目状态未改变")
+
+    updated_item = mark_collector_item_reviewed(item_id)
+    if not updated_item:
+        raise HTTPException(status_code=500, detail="线索已创建，但采集条目状态更新失败，请人工复核")
+
+    return {
+        "message": "已转入线索库，等待审核",
+        "collector_item_id": item_id,
+        "collector_item_status": updated_item.get("status"),
+        "clue_id": new_clue.id,
+    }
+
+
+@app.post("/collector-admin/items/{item_id}/ignore")
+def ignore_collector_item(
+    item_id: int,
+    request: AdminTokenRequest,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+
+    item = get_collector_item(item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="采集条目不存在")
+
+    status = item.get("status") or "new"
+    if status == "reviewed":
+        raise HTTPException(status_code=400, detail="该条目已转入线索库，不能标记忽略")
+    if status == "ignored":
+        raise HTTPException(status_code=400, detail="该条目已忽略")
+
+    updated_item = mark_collector_item_ignored(item_id)
+    if not updated_item:
+        raise HTTPException(status_code=404, detail="采集条目不存在")
+
+    return {
+        "message": "已标记忽略",
+        "collector_item_id": item_id,
+        "collector_item_status": updated_item.get("status"),
+    }
 
 
 @app.get("/collector-admin/items")

@@ -932,6 +932,47 @@ def create_manual_item(data: Dict[str, Any]) -> Dict[str, Any]:
     return row_to_dict(row) if row else {}
 
 
+def get_collector_item(item_id: int) -> Optional[Dict[str, Any]]:
+    init_collector_db()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT collector_items.*, collector_sources.name AS source_name
+            FROM collector_items
+            LEFT JOIN collector_sources ON collector_items.source_id = collector_sources.id
+            WHERE collector_items.id = ?
+            """,
+            (item_id,),
+        ).fetchone()
+    return row_to_dict(row) if row else None
+
+
+def update_collector_item_status(item_id: int, status: str) -> Optional[Dict[str, Any]]:
+    init_collector_db()
+    if status not in ALLOWED_ITEM_STATUSES:
+        raise ValueError("status must be new, reviewed, or ignored")
+
+    with get_connection() as conn:
+        row = conn.execute("SELECT id FROM collector_items WHERE id = ?", (item_id,)).fetchone()
+        if not row:
+            return None
+        conn.execute(
+            "UPDATE collector_items SET status = ? WHERE id = ?",
+            (status, item_id),
+        )
+        conn.commit()
+
+    return get_collector_item(item_id)
+
+
+def mark_collector_item_reviewed(item_id: int) -> Optional[Dict[str, Any]]:
+    return update_collector_item_status(item_id, "reviewed")
+
+
+def mark_collector_item_ignored(item_id: int) -> Optional[Dict[str, Any]]:
+    return update_collector_item_status(item_id, "ignored")
+
+
 def record_run(source_id: Optional[int], status: str, started_at: str, item_count: int, error_message: str = "") -> Dict[str, Any]:
     finished_at = now_text()
     with get_connection() as conn:
