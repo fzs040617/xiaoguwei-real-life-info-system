@@ -63,6 +63,29 @@ function collectorMessage(text, isError = false) {
     box.classList.toggle("user-admin-message-error", Boolean(isError));
 }
 
+function collectorClueTransferMessage(clueId) {
+    const box = ensureCollectorItemActionMessage();
+    if (!box) return;
+    const normalizedClueId = Number(clueId);
+    if (!Number.isInteger(normalizedClueId) || normalizedClueId <= 0) {
+        box.className = "collector-action-message collector-action-message-success";
+        box.textContent = "已转入线索库，等待审核";
+        scrollCollectorActionMessageIntoView(box);
+        return;
+    }
+    const clueUrl = `clue-detail.html?id=${encodeURIComponent(String(normalizedClueId))}`;
+    box.className = "collector-action-message collector-action-message-success";
+    box.innerHTML = `
+        <div>已转入线索库，等待审核</div>
+        <div class="collector-transfer-meta">线索 ID：${normalizedClueId}</div>
+        <div class="collector-transfer-actions">
+            <button type="button" class="small-button verify-button" onclick="location.href='${clueUrl}'">查看线索详情</button>
+            <button type="button" class="small-button btn-secondary" onclick="location.href='admin.html'">进入审核中心</button>
+        </div>
+    `;
+    scrollCollectorActionMessageIntoView(box);
+}
+
 function collectorDetectMessage(text, isError = false) {
     const box = document.getElementById("collectorDetectMessage");
     if (!box) return;
@@ -86,6 +109,23 @@ function collectorErrorMessage(error) {
         return COLLECTOR_NETWORK_MESSAGE;
     }
     return message || "请求失败";
+}
+
+function ensureCollectorItemActionMessage() {
+    const list = document.getElementById("collectorItemList");
+    if (!list || !list.parentElement) return null;
+    let box = document.getElementById("collectorItemActionMessage");
+    if (!box) {
+        box = document.createElement("div");
+        box.id = "collectorItemActionMessage";
+        list.parentElement.insertBefore(box, list);
+    }
+    return box;
+}
+
+function scrollCollectorActionMessageIntoView(box) {
+    if (!box || typeof box.scrollIntoView !== "function") return;
+    box.scrollIntoView({behavior: "smooth", block: "center"});
 }
 
 async function collectorRequest(path, options = {}) {
@@ -922,13 +962,13 @@ async function transferCollectorItemToClue(itemId, button) {
     collectorMessage("正在转入线索库...");
 
     try {
-        await collectorRequest(`/collector-admin/items/${itemId}/to-clue`, {
+        const data = await collectorRequest(`/collector-admin/items/${itemId}/to-clue`, {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({token: collectorToken()})
         });
-        collectorMessage("已转入线索库，等待审核");
         await loadCollectorItems();
+        collectorClueTransferMessage(data.clue_id);
     } catch (error) {
         collectorMessage(`转入线索库失败：${collectorErrorMessage(error)}`, true);
         if (button) {

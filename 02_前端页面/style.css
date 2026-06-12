@@ -593,6 +593,33 @@ button:hover {
     margin-top: 12px;
 }
 
+.collector-transfer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.collector-action-message {
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0 0 14px;
+    padding: 12px 14px;
+}
+
+.collector-action-message-success {
+    background: #eef8f2;
+    border: 1px solid #b9dfc9;
+    color: #1d5f3a;
+}
+
+.collector-transfer-meta {
+    color: #526258;
+    font-size: 13px;
+    margin-top: 4px;
+}
+
 .collector-item-status-note {
     border-radius: 6px;
     display: inline-block;
