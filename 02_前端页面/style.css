@@ -572,7 +572,19 @@ button:hover {
     margin-bottom: 8px;
 }
 
+.collector-item-filter-row,
+#collector-section-items .collector-toolbar {
+    grid-template-columns: minmax(180px, 1fr) minmax(120px, 140px) minmax(150px, 180px) minmax(190px, 230px) auto auto;
+    margin-bottom: 8px;
+}
+
 .collector-source-filter-summary {
+    color: #607069;
+    font-size: 13px;
+    margin: 0 0 12px;
+}
+
+.collector-item-filter-summary {
     color: #607069;
     font-size: 13px;
     margin: 0 0 12px;
@@ -670,6 +682,11 @@ button:hover {
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+}
+
+.collector-item-source {
+    border-left: 3px solid #d8e7f3;
+    padding-left: 8px;
 }
 
 .collector-transfer-actions {

@@ -8,6 +8,7 @@ const collectorLatestRunsBySource = new Map();
 let collectorAllSources = [];
 let collectorProblemSourceFilterActive = false;
 let collectorCurrentRunFilter = null;
+let collectorViewingSourceName = "";
 const COLLECTOR_SOURCE_TEMPLATES = [
     {
         name: "小谷围街道概况页",
@@ -164,6 +165,7 @@ async function initCollectorPage() {
         });
     }
     setupCollectorSourceFilters();
+    setupCollectorItemFilters();
     await Promise.all([
         loadCollectorSources(),
         loadCollectorItems(),
@@ -190,6 +192,8 @@ function handleCollectorPageClick(event) {
     handleCollectorSectionToggleClick(event);
     handleCollectorItemToClueClick(event);
     handleCollectorItemIgnoreClick(event);
+    handleCollectorItemFilterClick(event);
+    handleCollectorItemClearFilterClick(event);
     handleCollectorManualDetectClick(event);
     handleCollectorManualImportClick(event);
     handleCollectorSourceCollapseClick(event);
@@ -198,6 +202,7 @@ function handleCollectorPageClick(event) {
     handleCollectorSourceProblemClick(event);
     handleCollectorSourceClearFilterClick(event);
     handleCollectorSourceRunsClick(event);
+    handleCollectorSourceItemsClick(event);
     handleCollectorAllRunsClick(event);
     handleCollectorPreviewDetailCollapseClick(event);
     handleCollectorPreviewDetailClick(event);
@@ -219,6 +224,27 @@ function setupCollectorSourceFilters() {
                     event.preventDefault();
                     collectorProblemSourceFilterActive = false;
                     applyCollectorSourceFilters();
+                }
+            });
+        }
+    });
+}
+
+function setupCollectorItemFilters() {
+    ["collectorItemKeyword", "collectorItemStatus", "collectorItemPlatform", "collectorItemSource"].forEach(id => {
+        const input = document.getElementById(id);
+        if (!input || input.dataset.collectorItemFilterReady === "true") return;
+        input.dataset.collectorItemFilterReady = "true";
+        input.addEventListener("change", () => {
+            collectorViewingSourceName = "";
+            loadCollectorItems();
+        });
+        if (id === "collectorItemKeyword" || id === "collectorItemPlatform") {
+            input.addEventListener("keydown", event => {
+                if (event.key === "Enter") {
+                    event.preventDefault();
+                    collectorViewingSourceName = "";
+                    loadCollectorItems();
                 }
             });
         }
@@ -277,6 +303,29 @@ function handleCollectorItemIgnoreClick(event) {
         return;
     }
     ignoreCollectorItem(itemId, btn);
+}
+
+function handleCollectorItemFilterClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="filter-items"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    collectorViewingSourceName = "";
+    loadCollectorItems();
+}
+
+function handleCollectorItemClearFilterClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="clear-item-filters"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    clearCollectorItemFilters();
 }
 
 function handleCollectorManualImportClick(event) {
@@ -375,6 +424,22 @@ function handleCollectorSourceRunsClick(event) {
         return;
     }
     viewCollectorRunsForSource(sourceId, btn.dataset.sourceName || "");
+}
+
+function handleCollectorSourceItemsClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="view-source-items"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const sourceId = Number(btn.dataset.sourceId || 0);
+    if (!sourceId) {
+        collectorMessage("查看该源采集条目失败：缺少采集源 ID", true);
+        return;
+    }
+    viewCollectorItemsForSource(sourceId, btn.dataset.sourceName || "");
 }
 
 function handleCollectorAllRunsClick(event) {
@@ -567,6 +632,7 @@ async function loadCollectorSources() {
             collectorLatestRunsBySource.clear();
         }
         collectorAllSources = sourceData.data || [];
+        updateCollectorItemSourceOptions();
         applyCollectorSourceFilters();
     } catch (error) {
         box.innerHTML = `<div class="empty">采集源加载失败：${collectorEscapeHtml(collectorErrorMessage(error))}</div>`;
@@ -1039,6 +1105,7 @@ function renderCollectorSources(sources, totalCount = sources.length, filterStat
                 <div class="target-url">完整 URL：${collectorEscapeHtml(source.url || "")}</div>
                 <div class="collector-inline-preview" id="collector-preview-inline-${collectorEscapeAttribute(source.id)}"></div>
                 <div class="collector-source-collapse-row">
+                    <button type="button" class="small-button btn-secondary" data-action="view-source-items" data-source-id="${collectorEscapeAttribute(source.id)}" data-source-name="${collectorEscapeAttribute(source.name || "未命名采集源")}">查看该源采集条目</button>
                     <button type="button" class="small-button btn-secondary" data-action="view-source-runs" data-source-id="${collectorEscapeAttribute(source.id)}" data-source-name="${collectorEscapeAttribute(source.name || "未命名采集源")}">查看该源日志</button>
                     <button type="button" class="small-button" data-action="collapse-source-detail" data-source-id="${collectorEscapeAttribute(source.id)}">收起该源</button>
                 </div>
@@ -1201,27 +1268,114 @@ function renderCollectorPreview(result, sourceId = null) {
     scrollCollectorPreviewIntoView(box);
 }
 
+function updateCollectorItemSourceOptions() {
+    const sourceInput = document.getElementById("collectorItemSource");
+    if (!sourceInput) return;
+    const currentValue = sourceInput.value || "";
+    const options = ['<option value="">全部来源</option>'];
+    collectorAllSources.forEach(source => {
+        const sourceId = Number(source.id || 0);
+        if (!sourceId) return;
+        const sourceName = source.name || `采集源 #${sourceId}`;
+        options.push(`<option value="${collectorEscapeAttribute(sourceId)}">${collectorEscapeHtml(sourceName)}（ID: ${collectorEscapeHtml(sourceId)}）</option>`);
+    });
+    sourceInput.innerHTML = options.join("");
+    sourceInput.value = currentValue;
+}
+
+function getCollectorItemFilterState() {
+    const keywordInput = document.getElementById("collectorItemKeyword");
+    const statusInput = document.getElementById("collectorItemStatus");
+    const platformInput = document.getElementById("collectorItemPlatform");
+    const sourceInput = document.getElementById("collectorItemSource");
+    return {
+        keyword: keywordInput ? keywordInput.value.trim() : "",
+        status: statusInput ? statusInput.value : "",
+        platform: platformInput ? platformInput.value.trim() : "",
+        sourceId: sourceInput ? sourceInput.value : "",
+        sourceName: sourceInput && sourceInput.selectedOptions.length
+            ? sourceInput.selectedOptions[0].textContent.replace(/（ID: \d+）$/, "")
+            : ""
+    };
+}
+
+function renderCollectorItemFilterSummary(state = getCollectorItemFilterState()) {
+    const box = document.getElementById("collectorItemFilterSummary");
+    if (!box) return;
+    const parts = [];
+    if (state.keyword) parts.push(`关键词 ${state.keyword}`);
+    if (state.status) parts.push(`状态 ${state.status}`);
+    if (state.platform) parts.push(`平台 ${state.platform}`);
+    if (state.sourceId) parts.push(`来源 ${state.sourceName || `采集源 ID ${state.sourceId}`}`);
+    if (!parts.length) {
+        box.textContent = "当前显示全部采集条目";
+        return;
+    }
+    const prefix = collectorViewingSourceName && state.sourceId
+        ? `正在查看：${collectorViewingSourceName} 的采集条目；`
+        : "";
+    box.textContent = `${prefix}当前筛选：${parts.join(" / ")}`;
+}
+
+function clearCollectorItemFilters() {
+    ["collectorItemKeyword", "collectorItemStatus", "collectorItemPlatform", "collectorItemSource"].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = "";
+    });
+    collectorViewingSourceName = "";
+    loadCollectorItems();
+}
+
+async function viewCollectorItemsForSource(sourceId, sourceName = "") {
+    const normalizedSourceId = Number(sourceId || 0);
+    const resolvedSourceName = sourceName || `采集源 #${normalizedSourceId}`;
+    ["collectorItemKeyword", "collectorItemStatus", "collectorItemPlatform"].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = "";
+    });
+    const sourceInput = document.getElementById("collectorItemSource");
+    if (sourceInput) {
+        updateCollectorItemSourceOptions();
+        sourceInput.value = String(normalizedSourceId);
+    }
+    collectorViewingSourceName = resolvedSourceName;
+    expandCollectorSection("collector-section-items");
+    await loadCollectorItems();
+    scrollCollectorSectionHeaderIntoView("collector-section-items");
+}
+
+function renderCollectorItemSource(item) {
+    if (item.source_name) {
+        return `来源：${collectorEscapeHtml(item.source_name)}（ID: ${collectorEscapeHtml(item.source_id)}）`;
+    }
+    if (item.source_id) {
+        return `来源：采集源 ID ${collectorEscapeHtml(item.source_id)}`;
+    }
+    return "来源：人工导入 / 无采集源";
+}
+
 async function loadCollectorItems() {
     const box = document.getElementById("collectorItemList");
     if (!box) return;
     box.innerHTML = `<div class="empty">正在加载采集条目...</div>`;
 
-    const keywordInput = document.getElementById("collectorItemKeyword");
-    const statusInput = document.getElementById("collectorItemStatus");
-    const keyword = keywordInput ? keywordInput.value.trim() : "";
-    const status = statusInput ? statusInput.value : "";
+    const filterState = getCollectorItemFilterState();
+    renderCollectorItemFilterSummary(filterState);
     const query = new URLSearchParams({
         token: collectorToken(),
         limit: "50",
         offset: "0"
     });
-    if (keyword) query.set("keyword", keyword);
-    if (status) query.set("status", status);
+    if (filterState.keyword) query.set("keyword", filterState.keyword);
+    if (filterState.status) query.set("status", filterState.status);
+    if (filterState.platform) query.set("platform", filterState.platform);
+    if (filterState.sourceId) query.set("source_id", filterState.sourceId);
 
     try {
         const data = await collectorRequest(`/collector-admin/items?${query.toString()}`);
         updateCollectorItemTitle(data.total ?? (data.data || []).length);
         renderCollectorItems(data.data || []);
+        renderCollectorItemFilterSummary(filterState);
     } catch (error) {
         box.innerHTML = `<div class="empty">采集条目加载失败：${collectorEscapeHtml(collectorErrorMessage(error))}</div>`;
     }
@@ -1290,7 +1444,11 @@ function renderCollectorItems(items) {
     if (!box) return;
 
     if (!items.length) {
-        box.innerHTML = `<div class="empty">暂无采集条目。</div>`;
+        const filterState = getCollectorItemFilterState();
+        const emptyText = filterState.sourceId
+            ? `该采集源暂无采集条目。请确认该源是否已成功运行并写入条目；同名采集源的历史条目不会合并显示。`
+            : "暂无采集条目。";
+        box.innerHTML = `<div class="empty">${collectorEscapeHtml(emptyText)}</div>`;
         return;
     }
 
@@ -1303,7 +1461,7 @@ function renderCollectorItems(items) {
             </div>
             <div class="target-url">${item.url ? `<a href="${collectorEscapeAttribute(item.url)}" target="_blank" rel="noopener noreferrer">${collectorEscapeHtml(item.url)}</a>` : "无链接"}</div>
             <div class="summary">${collectorEscapeHtml(item.summary || "暂无摘要")}</div>
-            <div class="notice">来源：${collectorEscapeHtml(item.source_name || String(item.source_id || "-"))} · 发布时间：${collectorEscapeHtml(item.published_at || "-")} · 抓取时间：${collectorEscapeHtml(item.fetched_at || "-")}</div>
+            <div class="notice collector-item-source">${renderCollectorItemSource(item)} · 发布时间：${collectorEscapeHtml(item.published_at || "-")} · 抓取时间：${collectorEscapeHtml(item.fetched_at || "-")}</div>
             ${renderCollectorItemActions(item)}
         </div>
     `).join("");

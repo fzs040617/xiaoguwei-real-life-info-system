@@ -241,8 +241,14 @@
                     <option value="reviewed">reviewed</option>
                     <option value="ignored">ignored</option>
                 </select>
-                <button onclick="loadCollectorItems()">筛选</button>
+                <input id="collectorItemPlatform" placeholder="按平台筛选">
+                <select id="collectorItemSource">
+                    <option value="">全部来源</option>
+                </select>
+                <button type="button" data-action="filter-items">筛选</button>
+                <button type="button" class="small-button btn-secondary" data-action="clear-item-filters">清除筛选</button>
             </div>
+            <div id="collectorItemFilterSummary" class="collector-item-filter-summary">当前显示全部采集条目</div>
             <div id="collectorItemList" class="empty">正在加载采集条目...</div>
             <div class="collector-collapse-row">
                 <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-items">收起本区</button>
@@ -268,7 +274,7 @@
 </div>
 
 <script src="app.js?v=9"></script>
-<script src="crawler-collector.js?v=20260612-manual-detect"></script>
+<script src="crawler-collector.js?v=20260615-item-source-filter"></script>
 <script src="global-loader.js?v=61"></script>
 </body>
 </html>

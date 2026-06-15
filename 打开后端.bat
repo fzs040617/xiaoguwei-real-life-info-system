@@ -5,6 +5,7 @@ title XGW Backend
 set "ROOT=%~dp0"
 set "BACKEND="
 set "FRONTEND_INDEX="
+set "BACKEND_PYTHON="
 
 echo Project root:
 echo %ROOT%
@@ -46,18 +47,22 @@ echo.
 
 cd /d "%BACKEND%"
 
-echo Starting backend with py...
+set "BACKEND_PYTHON=%BACKEND%\.venv\Scripts\python.exe"
+
+if not exist "%BACKEND_PYTHON%" (
+    echo ERROR: Backend virtual environment Python was not found.
+    echo Expected: %BACKEND_PYTHON%
+    echo Please confirm the backend .venv folder exists under the backend folder.
+    echo.
+    pause
+    exit /b 1
+)
+
+echo Starting backend with project virtual environment Python...
 echo API docs: http://127.0.0.1:8000/docs
 echo.
 
-py -m uvicorn app:app --reload --host 127.0.0.1 --port 8000
-
-if errorlevel 1 (
-    echo.
-    echo WARNING: py command failed. Trying python...
-    echo.
-    python -m uvicorn app:app --reload --host 127.0.0.1 --port 8000
-)
+"%BACKEND_PYTHON%" -m uvicorn app:app --reload --host 127.0.0.1 --port 8000
 
 echo.
 echo Backend process ended.

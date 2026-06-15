@@ -1084,18 +1084,18 @@ def list_items(
     values: List[Any] = []
 
     if platform:
-        clauses.append("platform LIKE ?")
+        clauses.append("collector_items.platform LIKE ?")
         values.append(f"%{platform}%")
     if source_id:
-        clauses.append("source_id = ?")
+        clauses.append("collector_items.source_id = ?")
         values.append(source_id)
     if status:
         if status not in ALLOWED_ITEM_STATUSES:
             raise ValueError("status must be new, reviewed, or ignored")
-        clauses.append("status = ?")
+        clauses.append("collector_items.status = ?")
         values.append(status)
     if keyword:
-        clauses.append("(title LIKE ? OR summary LIKE ? OR url LIKE ?)")
+        clauses.append("(collector_items.title LIKE ? OR collector_items.summary LIKE ? OR collector_items.url LIKE ?)")
         like = f"%{keyword}%"
         values.extend([like, like, like])
 
