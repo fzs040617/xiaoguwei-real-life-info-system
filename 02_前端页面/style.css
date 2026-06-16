@@ -1077,6 +1077,29 @@ body:not(.xgw-backup-page) #backupImportLayout {
     visibility: hidden !important;
 }
 
+.manage-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.manage-section-header h2 {
+    margin: 0;
+}
+
+.manage-section-collapsed .manage-section-body {
+    display: none;
+}
+
+@media (max-width: 700px) {
+    .manage-section-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
 .clue-filter-panel {
     border: 1px solid #dcece4;
     background: #f7faf8;

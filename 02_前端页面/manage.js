@@ -5,9 +5,46 @@ function getManageToken() {
     return localStorage.getItem(MANAGE_TOKEN_KEY) || "";
 }
 
+document.addEventListener("click", event => {
+    const button = event.target.closest('[data-action="toggle-manage-section"]');
+    if (!button) return;
+
+    toggleManageSection(button.dataset.target);
+});
+
+function toggleManageSection(sectionId) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+
+    const collapsed = section.classList.toggle("manage-section-collapsed");
+    const button = section.querySelector('[data-action="toggle-manage-section"]');
+    if (button) {
+        button.textContent = collapsed ? "展开" : "收起";
+    }
+}
+
 async function loadManageData() {
     await loadManageVerifiedItems();
     await loadManageClues();
+}
+
+async function refreshManageData(button) {
+    const refreshButton = button || document.getElementById("manageRefreshButton");
+    const originalText = refreshButton ? refreshButton.textContent : "";
+
+    if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.textContent = "刷新中...";
+    }
+
+    try {
+        await loadManageData();
+    } finally {
+        if (refreshButton) {
+            refreshButton.disabled = false;
+            refreshButton.textContent = originalText || "刷新数据";
+        }
+    }
 }
 
 async function loadManageVerifiedItems() {

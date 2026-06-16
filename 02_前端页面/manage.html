@@ -36,22 +36,32 @@
         <p class="notice">
             这里用于快速清理测试数据、修改标题、分类、简介等内容。删除是真删除，测试时只删确定不要的数据。
         </p>
-        <button onclick="loadManageData()">刷新数据</button>
+        <button id="manageRefreshButton" type="button" onclick="refreshManageData(this)">刷新数据</button>
     </div>
 
-    <div class="section">
-        <h2>真实库数据</h2>
-        <div id="manageVerifiedList" class="empty">正在加载真实库数据...</div>
+    <div id="manage-section-verified" class="section manage-collapsible-section">
+        <div class="manage-section-header">
+            <h2>真实库数据</h2>
+            <button type="button" class="small-button" data-action="toggle-manage-section" data-target="manage-section-verified">收起</button>
+        </div>
+        <div class="manage-section-body">
+            <div id="manageVerifiedList" class="empty">正在加载真实库数据...</div>
+        </div>
     </div>
 
-    <div class="section">
-        <h2>线索库数据</h2>
-        <div id="manageClueList" class="empty">正在加载线索库数据...</div>
+    <div id="manage-section-clues" class="section manage-collapsible-section">
+        <div class="manage-section-header">
+            <h2>线索库数据</h2>
+            <button type="button" class="small-button" data-action="toggle-manage-section" data-target="manage-section-clues">收起</button>
+        </div>
+        <div class="manage-section-body">
+            <div id="manageClueList" class="empty">正在加载线索库数据...</div>
+        </div>
     </div>
 
 </div>
 
-<script src="manage.js?v=2"></script>
+<script src="manage.js?v=20260616-collapse"></script>
 <script src="manage-filter.js"></script>
 <script src="detail-link.js"></script>
 <script src="history-auto.js?v=19"></script>
