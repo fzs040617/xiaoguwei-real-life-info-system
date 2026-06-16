@@ -5,10 +5,13 @@ let collectorLastAutoKeyword = "";
 let collectorPreviewDocumentEventsBound = false;
 const collectorExpandedSources = new Set();
 const collectorLatestRunsBySource = new Map();
+const collectorSourceItemCounts = new Map();
 let collectorAllSources = [];
 let collectorProblemSourceFilterActive = false;
 let collectorCurrentRunFilter = null;
 let collectorViewingSourceName = "";
+let collectorSourceDiagnosticsReady = false;
+let collectorSourceDiagnosticsPartialFailure = false;
 const COLLECTOR_SOURCE_TEMPLATES = [
     {
         name: "小谷围街道概况页",
@@ -633,6 +636,7 @@ async function loadCollectorSources() {
         }
         collectorAllSources = sourceData.data || [];
         updateCollectorItemSourceOptions();
+        await loadCollectorSourceItemCounts(collectorAllSources);
         applyCollectorSourceFilters();
     } catch (error) {
         box.innerHTML = `<div class="empty">采集源加载失败：${collectorEscapeHtml(collectorErrorMessage(error))}</div>`;
@@ -961,6 +965,219 @@ async function submitManualCollectorItem() {
     }
 }
 
+async function loadCollectorSourceItemCounts(sources) {
+    collectorSourceItemCounts.clear();
+    collectorSourceDiagnosticsReady = false;
+    collectorSourceDiagnosticsPartialFailure = false;
+    renderCollectorHealthSummary([], true);
+
+    const validSources = (sources || []).filter(source => Number(source.id || 0) > 0);
+    if (!validSources.length) {
+        collectorSourceDiagnosticsReady = true;
+        renderCollectorHealthSummary([]);
+        return;
+    }
+
+    await Promise.all(validSources.map(async source => {
+        const sourceId = Number(source.id || 0);
+        const query = new URLSearchParams({
+            token: collectorToken(),
+            source_id: String(sourceId),
+            limit: "1",
+            offset: "0"
+        });
+        try {
+            const result = await collectorRequest(`/collector-admin/items?${query.toString()}`);
+            collectorSourceItemCounts.set(sourceId, Number(result.total || 0));
+        } catch (error) {
+            collectorSourceDiagnosticsPartialFailure = true;
+            collectorSourceItemCounts.set(sourceId, null);
+        }
+    }));
+
+    collectorSourceDiagnosticsReady = true;
+}
+
+function normalizeCollectorDiagnosticValue(value) {
+    return String(value || "").trim().toLowerCase();
+}
+
+function collectorSourceDuplicateMaps(sources = collectorAllSources) {
+    const maps = {
+        name: new Map(),
+        url: new Map(),
+        platformUrl: new Map()
+    };
+    (sources || []).forEach(source => {
+        const name = normalizeCollectorDiagnosticValue(source.name);
+        const url = normalizeCollectorDiagnosticValue(source.url);
+        const platform = normalizeCollectorDiagnosticValue(source.platform);
+        const platformUrl = `${platform}||${url}`;
+        if (name) maps.name.set(name, (maps.name.get(name) || 0) + 1);
+        if (url) maps.url.set(url, (maps.url.get(url) || 0) + 1);
+        if (platform && url) maps.platformUrl.set(platformUrl, (maps.platformUrl.get(platformUrl) || 0) + 1);
+    });
+    return maps;
+}
+
+function collectorSourceItemCount(source) {
+    const sourceId = Number(source && source.id ? source.id : 0);
+    if (!sourceId || !collectorSourceItemCounts.has(sourceId)) return null;
+    return collectorSourceItemCounts.get(sourceId);
+}
+
+function collectorSourceLooksLikeTest(source) {
+    const combined = [
+        source.name,
+        source.platform,
+        source.url,
+        source.notes
+    ].map(value => String(value || "")).join(" ").toLowerCase();
+    return /测试|test|jsonplaceholder|not-exist|example/.test(combined);
+}
+
+function collectorSourceDiagnosticInfo(source, duplicateMaps = collectorSourceDuplicateMaps()) {
+    const sourceId = Number(source && source.id ? source.id : 0);
+    const itemCount = collectorSourceItemCount(source);
+    const hasKnownItemCount = itemCount !== null;
+    const latestRun = collectorLatestRunsBySource.get(sourceId);
+    const latestStatus = latestRun ? String(latestRun.status || "").trim() : "none";
+    const nameKey = normalizeCollectorDiagnosticValue(source.name);
+    const urlKey = normalizeCollectorDiagnosticValue(source.url);
+    const platformUrlKey = `${normalizeCollectorDiagnosticValue(source.platform)}||${urlKey}`;
+    const duplicateName = nameKey && (duplicateMaps.name.get(nameKey) || 0) > 1;
+    const duplicateUrl = urlKey && (duplicateMaps.url.get(urlKey) || 0) > 1;
+    const duplicatePlatformUrl = normalizeCollectorDiagnosticValue(source.platform) && urlKey &&
+        (duplicateMaps.platformUrl.get(platformUrlKey) || 0) > 1;
+    const enabledNoItems = Boolean(source.enabled) && hasKnownItemCount && itemCount === 0;
+    const failed = latestStatus === "failed";
+    const suspectTest = collectorSourceLooksLikeTest(source);
+    const hasHistoricalItems = hasKnownItemCount && itemCount > 0;
+
+    return {
+        itemCount,
+        hasKnownItemCount,
+        latestRun,
+        latestStatus,
+        duplicateName,
+        duplicateUrl,
+        duplicatePlatformUrl,
+        enabledNoItems,
+        failed,
+        suspectTest,
+        hasHistoricalItems,
+        problem: failed || enabledNoItems || duplicateName || duplicateUrl || duplicatePlatformUrl || suspectTest ||
+            (Boolean(source.enabled) && latestStatus === "none")
+    };
+}
+
+function collectorSourceDiagnosticLabels(source, duplicateMaps = collectorSourceDuplicateMaps()) {
+    const info = collectorSourceDiagnosticInfo(source, duplicateMaps);
+    const labels = [];
+    if (info.duplicateName) labels.push({text: "重复名称", level: "warning"});
+    if (info.duplicateUrl) labels.push({text: "重复 URL", level: "warning"});
+    if (info.duplicatePlatformUrl) labels.push({text: "platform+url 重复", level: "warning"});
+    if (info.enabledNoItems) labels.push({text: "启用但无条目", level: "risk"});
+    if (info.failed) labels.push({text: "最近失败", level: "danger"});
+    if (info.suspectTest) labels.push({text: "疑似测试源", level: "risk"});
+    if (info.hasHistoricalItems) labels.push({text: `有历史条目 ${info.itemCount} 条`, level: "safe"});
+    return labels;
+}
+
+function collectorSourceGovernanceTips(source, duplicateMaps = collectorSourceDuplicateMaps()) {
+    const info = collectorSourceDiagnosticInfo(source, duplicateMaps);
+    const tips = [];
+    if (info.hasHistoricalItems) {
+        tips.push("该源已有历史采集条目，建议保留来源解释；如不再使用，可仅停用，不建议删除。");
+    }
+    if (info.enabledNoItems && (info.duplicateName || info.duplicateUrl || info.duplicatePlatformUrl)) {
+        tips.push("该源启用但暂无条目，可先查看运行日志和采集条目，再考虑手动停用。");
+    }
+    if (info.suspectTest) {
+        tips.push("疑似测试源，请人工确认后再停用。");
+    }
+    if (info.failed) {
+        tips.push("最近运行失败，请先查看该源日志。");
+    }
+    return tips;
+}
+
+function renderCollectorSourceDiagnosticLabels(source, duplicateMaps = collectorSourceDuplicateMaps()) {
+    const labels = collectorSourceDiagnosticLabels(source, duplicateMaps);
+    if (!labels.length) return "";
+    return `
+        <div class="collector-diagnostic-tags">
+            ${labels.map(label => `<span class="collector-diagnostic-tag collector-diagnostic-${collectorEscapeAttribute(label.level)}">${collectorEscapeHtml(label.text)}</span>`).join("")}
+        </div>
+    `;
+}
+
+function renderCollectorSourceGovernanceTips(source, duplicateMaps = collectorSourceDuplicateMaps()) {
+    const tips = collectorSourceGovernanceTips(source, duplicateMaps);
+    if (!tips.length) return "";
+    return `
+        <div class="collector-governance-tips">
+            ${tips.map(tip => `<div class="collector-governance-tip">${collectorEscapeHtml(tip)}</div>`).join("")}
+        </div>
+    `;
+}
+
+function collectorHealthStats(sources = collectorAllSources) {
+    const duplicateMaps = collectorSourceDuplicateMaps(sources);
+    const stats = {
+        total: (sources || []).length,
+        enabled: 0,
+        disabled: 0,
+        withItems: 0,
+        enabledNoItems: 0,
+        failed: 0,
+        duplicateSuspect: 0,
+        suspectTest: 0
+    };
+
+    (sources || []).forEach(source => {
+        const info = collectorSourceDiagnosticInfo(source, duplicateMaps);
+        if (source.enabled) stats.enabled += 1;
+        else stats.disabled += 1;
+        if (info.hasHistoricalItems) stats.withItems += 1;
+        if (info.enabledNoItems) stats.enabledNoItems += 1;
+        if (info.failed) stats.failed += 1;
+        if (info.duplicateName || info.duplicateUrl || info.duplicatePlatformUrl) stats.duplicateSuspect += 1;
+        if (info.suspectTest) stats.suspectTest += 1;
+    });
+
+    return stats;
+}
+
+function renderCollectorHealthSummary(sources = collectorAllSources, loading = false) {
+    const box = document.getElementById("collectorSourceHealthSummary");
+    if (!box) return;
+
+    if (loading) {
+        box.innerHTML = `<div class="collector-health-loading">正在加载采集源健康诊断...</div>`;
+        return;
+    }
+
+    const stats = collectorHealthStats(sources);
+    const warning = collectorSourceDiagnosticsPartialFailure
+        ? `<div class="collector-health-warning">诊断数据部分加载失败，部分源的条目数量可能暂不可用。</div>`
+        : "";
+    box.innerHTML = `
+        <div class="collector-health-grid">
+            <div><strong>${stats.total}</strong><span>采集源总数</span></div>
+            <div><strong>${stats.enabled}</strong><span>启用源</span></div>
+            <div><strong>${stats.disabled}</strong><span>停用源</span></div>
+            <div><strong>${stats.withItems}</strong><span>有条目的源</span></div>
+            <div><strong>${stats.enabledNoItems}</strong><span>启用但无条目</span></div>
+            <div><strong>${stats.failed}</strong><span>最近失败源</span></div>
+            <div><strong>${stats.duplicateSuspect}</strong><span>疑似重复源</span></div>
+            <div><strong>${stats.suspectTest}</strong><span>疑似测试源</span></div>
+        </div>
+        ${warning}
+        <div class="collector-health-note">健康诊断仅做管理员提示，不会自动停用、删除、合并或迁移任何采集源。</div>
+    `;
+}
+
 function getCollectorSourceFilterState() {
     return {
         keyword: (document.getElementById("collectorSourceKeyword")?.value || "").trim().toLowerCase(),
@@ -1009,8 +1226,7 @@ function collectorSourceMatchesRunStatus(source, runStatusFilter) {
 }
 
 function collectorSourceIsProblem(source) {
-    const status = collectorSourceLatestRunStatus(source);
-    return status === "failed" || (Boolean(source.enabled) && status === "none");
+    return collectorSourceDiagnosticInfo(source).problem;
 }
 
 function applyCollectorSourceFilters() {
@@ -1064,7 +1280,9 @@ function renderCollectorSources(sources, totalCount = sources.length, filterStat
     const box = document.getElementById("collectorSourceList");
     if (!box) return;
     updateCollectorSourceTitle(sources.length, totalCount);
+    renderCollectorHealthSummary(collectorAllSources);
     renderCollectorSourceFilterSummary(sources.length, totalCount, filterState);
+    const duplicateMaps = collectorSourceDuplicateMaps(collectorAllSources);
     const problemButton = document.querySelector('[data-action="problem-sources"]');
     if (problemButton) {
         problemButton.classList.toggle("collector-filter-active", Boolean(filterState.problemOnly));
@@ -1090,6 +1308,7 @@ function renderCollectorSources(sources, totalCount = sources.length, filterStat
                     <span class="collector-source-platform">${collectorEscapeHtml(source.platform || "未填写平台")}</span>
                     <span class="collector-source-url">${collectorEscapeHtml(shortCollectorUrl(source.url || ""))}</span>
                     ${renderCollectorSourceRunBadge(source)}
+                    ${renderCollectorSourceDiagnosticLabels(source, duplicateMaps)}
                 </div>
                 <div class="collector-source-actions">
                     <button type="button" class="small-button" data-action="toggle-source-detail" data-source-id="${collectorEscapeAttribute(source.id)}">${collectorExpandedSources.has(Number(source.id)) ? "收起" : "展开"}</button>
@@ -1102,6 +1321,7 @@ function renderCollectorSources(sources, totalCount = sources.length, filterStat
                 <div>关键词：${collectorEscapeHtml(source.keyword || "空关键词：不过滤公开结果")}</div>
                 <div>备注：${collectorEscapeHtml(source.notes || "暂无备注")}</div>
                 ${renderCollectorSourceRunSummary(source)}
+                ${renderCollectorSourceGovernanceTips(source, duplicateMaps)}
                 <div class="target-url">完整 URL：${collectorEscapeHtml(source.url || "")}</div>
                 <div class="collector-inline-preview" id="collector-preview-inline-${collectorEscapeAttribute(source.id)}"></div>
                 <div class="collector-source-collapse-row">

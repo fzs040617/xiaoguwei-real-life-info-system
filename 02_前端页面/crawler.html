@@ -199,6 +199,9 @@
                 <button type="button" class="small-button warn-button" data-action="problem-sources">只看异常源</button>
                 <button type="button" class="small-button btn-secondary" data-action="clear-source-filters">清除筛选</button>
             </div>
+            <div id="collectorSourceHealthSummary" class="collector-health-summary">
+                <div class="collector-health-loading">正在加载采集源健康诊断...</div>
+            </div>
             <div id="collectorSourceFilterSummary" class="collector-source-filter-summary">显示全部采集源</div>
             <div id="collectorSourceList" class="empty">正在加载采集源...</div>
             <div class="collector-collapse-row">
@@ -274,7 +277,7 @@
 </div>
 
 <script src="app.js?v=9"></script>
-<script src="crawler-collector.js?v=20260615-item-source-filter"></script>
+<script src="crawler-collector.js?v=20260616-source-health"></script>
 <script src="global-loader.js?v=61"></script>
 </body>
 </html>

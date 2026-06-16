@@ -578,6 +578,52 @@ button:hover {
     margin-bottom: 8px;
 }
 
+.collector-health-summary {
+    background: #f7fbf9;
+    border: 1px solid #dce9e3;
+    border-radius: 8px;
+    margin: 0 0 12px;
+    padding: 12px;
+}
+
+.collector-health-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.collector-health-grid div {
+    background: #ffffff;
+    border: 1px solid #e5ece8;
+    border-radius: 6px;
+    padding: 9px 10px;
+}
+
+.collector-health-grid strong {
+    color: #1e5f43;
+    display: block;
+    font-size: 20px;
+    line-height: 1.2;
+}
+
+.collector-health-grid span,
+.collector-health-note,
+.collector-health-loading,
+.collector-health-warning {
+    color: #607069;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.collector-health-note,
+.collector-health-warning {
+    margin-top: 8px;
+}
+
+.collector-health-warning {
+    color: #9a5a00;
+}
+
 .collector-source-filter-summary {
     color: #607069;
     font-size: 13px;
@@ -607,6 +653,57 @@ button:hover {
     line-height: 1.7;
     margin-top: 10px;
     padding-top: 10px;
+}
+
+.collector-diagnostic-tags {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.collector-diagnostic-tag {
+    border-radius: 999px;
+    display: inline-flex;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.2;
+    padding: 4px 8px;
+}
+
+.collector-diagnostic-warning {
+    background: #fff7df;
+    color: #8a5c00;
+}
+
+.collector-diagnostic-risk {
+    background: #fff0e5;
+    color: #a14b00;
+}
+
+.collector-diagnostic-danger {
+    background: #fdeeee;
+    color: #b23b35;
+}
+
+.collector-diagnostic-safe {
+    background: #e8f5ee;
+    color: #1d6b43;
+}
+
+.collector-governance-tips {
+    display: grid;
+    gap: 6px;
+    margin: 8px 0;
+}
+
+.collector-governance-tip {
+    background: #fbfcfa;
+    border-left: 3px solid #8ebfa7;
+    border-radius: 6px;
+    color: #53635a;
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 7px 10px;
 }
 
 .collector-run-summary {
