@@ -46,6 +46,10 @@
             return;
         }
 
+        if (isBackendAuditedHistoryPath(path, method)) {
+            return;
+        }
+
         const target = inferHistoryTarget(path);
 
         if (!target) {
@@ -199,6 +203,40 @@
         }
 
         return null;
+    }
+
+    function isBackendAuditedHistoryPath(path, method) {
+        const parts = path.split("/").filter(Boolean);
+
+        if (parts.length === 2 && parts[0] === "clues" && method === "PATCH") {
+            return true;
+        }
+
+        if (parts.length === 3 && parts[0] === "clues" && parts[2] === "status" && method === "PATCH") {
+            return true;
+        }
+
+        if (parts.length === 3 && parts[0] === "clues" && parts[2] === "archive" && method === "POST") {
+            return true;
+        }
+
+        if (parts.length === 3 && parts[0] === "clues" && parts[2] === "restore" && method === "POST") {
+            return true;
+        }
+
+        if (parts.length === 2 && parts[0] === "clues" && method === "DELETE") {
+            return true;
+        }
+
+        if (parts.length === 4 && parts[0] === "admin" && parts[1] === "clues" && parts[3] === "approve" && method === "POST") {
+            return true;
+        }
+
+        if (parts.length === 4 && parts[0] === "collector-admin" && parts[1] === "items" && parts[3] === "to-clue" && method === "POST") {
+            return true;
+        }
+
+        return false;
     }
 
     function inferHistoryAction(path, method) {

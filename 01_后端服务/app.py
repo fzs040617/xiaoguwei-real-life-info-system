@@ -77,6 +77,40 @@ def get_db():
         db.close()
 
 
+def record_update_history(
+    db: Session,
+    target_type: str,
+    target_id: int,
+    action: str,
+    title: Optional[str] = None,
+    detail: Optional[str] = None,
+    operator: str = "后端审计",
+):
+    target_type = (target_type or "").strip()
+    action = (action or "").strip()
+    operator = (operator or "后端审计").strip() or "后端审计"
+
+    if not target_type or not action or target_id is None:
+        return None
+
+    try:
+        history = UpdateHistory(
+            target_type=target_type,
+            target_id=target_id,
+            action=action,
+            title=title,
+            detail=detail,
+            operator=operator,
+        )
+        db.add(history)
+        db.commit()
+        db.refresh(history)
+        return history
+    except Exception:
+        db.rollback()
+        return None
+
+
 class ClueCreate(BaseModel):
     title: str
     category: Optional[str] = None
@@ -543,6 +577,20 @@ def collector_item_to_clue(
     if not updated_item:
         raise HTTPException(status_code=500, detail="线索已创建，但采集条目状态更新失败，请人工复核")
 
+    record_update_history(
+        db,
+        target_type="clue",
+        target_id=new_clue.id,
+        action="采集条目转入线索库",
+        title=new_clue.title,
+        detail=(
+            f"collector_item_id={item_id}；"
+            f"来源平台：{new_clue.source_platform or '未知'}；"
+            f"来源链接：{new_clue.source_url or '无'}；"
+            "分类：外部线索；状态：待核验"
+        ),
+    )
+
     return {
         "message": "已转入线索库，等待审核",
         "collector_item_id": item_id,
@@ -856,6 +904,8 @@ def approve_clue_to_verified(
     if clue is None:
         raise HTTPException(status_code=404, detail="线索不存在")
 
+    old_status = clue.status
+
     new_item = VerifiedItem(
         title=clue.title,
         category=clue.category,
@@ -869,6 +919,15 @@ def approve_clue_to_verified(
     db.add(new_item)
     db.commit()
     db.refresh(new_item)
+
+    record_update_history(
+        db,
+        target_type="clue",
+        target_id=clue.id,
+        action="审核通过并同步真实库",
+        title=clue.title,
+        detail=f"状态：{old_status or '未知'} -> {clue.status}；真实库 ID：{new_item.id}",
+    )
 
     return {
         "message": "线索已审核通过，并同步到真实库",
@@ -993,9 +1052,19 @@ def update_clue_status(
     if clue is None:
         raise HTTPException(status_code=404, detail="线索不存在")
 
+    old_status = clue.status
     clue.status = status_data.status
     db.commit()
     db.refresh(clue)
+
+    record_update_history(
+        db,
+        target_type="clue",
+        target_id=clue.id,
+        action="修改线索状态",
+        title=clue.title,
+        detail=f"状态：{old_status or '未知'} -> {clue.status or '未知'}",
+    )
 
     return {
         "message": "线索状态已更新",
@@ -1027,6 +1096,19 @@ def delete_clue(
 
     db.delete(clue)
     db.commit()
+
+    record_update_history(
+        db,
+        target_type="clue",
+        target_id=clue_id,
+        action="删除线索",
+        title=deleted_info["title"],
+        detail=(
+            f"删除前标题：{deleted_info['title'] or '未命名'}；"
+            f"分类：{deleted_info['category'] or '未分类'}；"
+            f"状态：{deleted_info['status'] or '未知'}"
+        ),
+    )
 
     return {
         "message": "线索已删除",
@@ -1092,21 +1174,44 @@ def update_clue(
     if clue is None:
         raise HTTPException(status_code=404, detail="线索不存在")
 
+    changes = []
+
     if update_data.title is not None:
+        if clue.title != update_data.title:
+            changes.append(f"title：{clue.title or ''} -> {update_data.title or ''}")
         clue.title = update_data.title
     if update_data.category is not None:
+        if clue.category != update_data.category:
+            changes.append(f"category：{clue.category or ''} -> {update_data.category or ''}")
         clue.category = update_data.category
     if update_data.source_platform is not None:
+        if clue.source_platform != update_data.source_platform:
+            changes.append(f"source_platform：{clue.source_platform or ''} -> {update_data.source_platform or ''}")
         clue.source_platform = update_data.source_platform
     if update_data.source_url is not None:
+        if clue.source_url != update_data.source_url:
+            changes.append(f"source_url：{clue.source_url or ''} -> {update_data.source_url or ''}")
         clue.source_url = update_data.source_url
     if update_data.summary is not None:
+        if clue.summary != update_data.summary:
+            changes.append("summary：已更新")
         clue.summary = update_data.summary
     if update_data.status is not None:
+        if clue.status != update_data.status:
+            changes.append(f"status：{clue.status or ''} -> {update_data.status or ''}")
         clue.status = update_data.status
 
     db.commit()
     db.refresh(clue)
+
+    record_update_history(
+        db,
+        target_type="clue",
+        target_id=clue.id,
+        action="编辑线索",
+        title=clue.title,
+        detail="；".join(changes) if changes else "收到编辑请求，字段值未变化",
+    )
 
     return {
         "message": "线索已更新",
@@ -1291,9 +1396,19 @@ def archive_clue(
     if clue is None:
         raise HTTPException(status_code=404, detail="线索不存在")
 
+    old_status = clue.status
     clue.status = "已归档"
     db.commit()
     db.refresh(clue)
+
+    record_update_history(
+        db,
+        target_type="clue",
+        target_id=clue.id,
+        action="归档线索",
+        title=clue.title,
+        detail=f"状态：{old_status or '未知'} -> 已归档",
+    )
 
     return {
         "message": "线索已归档",
@@ -1317,9 +1432,19 @@ def restore_clue(
     if clue is None:
         raise HTTPException(status_code=404, detail="线索不存在")
 
+    old_status = clue.status
     clue.status = "待核验"
     db.commit()
     db.refresh(clue)
+
+    record_update_history(
+        db,
+        target_type="clue",
+        target_id=clue.id,
+        action="恢复线索",
+        title=clue.title,
+        detail=f"状态：{old_status or '未知'} -> 待核验",
+    )
 
     return {
         "message": "线索已恢复为待核验",
