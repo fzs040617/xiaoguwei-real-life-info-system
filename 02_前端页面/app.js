@@ -9,6 +9,11 @@ let currentVerifiedItems = [];
 let currentClues = [];
 let currentClueFilter = "pending";
 let currentCategoryFilter = "全部";
+let currentClueStatusFilter = "待核验";
+let currentClueCategoryFilter = "全部分类";
+let currentClueSourceFilter = "全部来源";
+let currentClueExternalOnly = false;
+let currentClueLinkedOnly = false;
 
 async function loadHomeData() {
     try {
@@ -26,6 +31,7 @@ async function loadHomeData() {
         currentVerifiedItems = verifiedData.data || [];
         currentClues = cluesData.data || [];
 
+        renderClueFilterOptions(currentClues);
         renderVerified(currentVerifiedItems);
         renderClues(currentClues);
     } catch (error) {
@@ -65,6 +71,7 @@ async function search() {
     currentVerifiedItems = data.verified_items || [];
     currentClues = data.clues || [];
 
+    renderClueFilterOptions(currentClues);
     renderVerified(currentVerifiedItems);
     renderClues(currentClues);
 }
@@ -100,6 +107,18 @@ function filterByCategory(items) {
 
 function setClueFilter(filter) {
     currentClueFilter = filter;
+
+    if (filter === "pending") {
+        currentClueStatusFilter = "待核验";
+    } else if (filter === "approved") {
+        currentClueStatusFilter = "已转入真实库";
+    } else {
+        currentClueStatusFilter = "全部状态";
+    }
+
+    currentClueExternalOnly = false;
+    currentClueLinkedOnly = false;
+    updateAdvancedClueFilterInputs();
     updateFilterButtons();
     renderClues(currentClues);
 }
@@ -118,6 +137,116 @@ function updateFilterButtons() {
     if (currentClueFilter === "pending") pending.classList.add("active");
     else if (currentClueFilter === "approved") approved.classList.add("active");
     else all.classList.add("active");
+}
+
+function setClueStatusFilter(status) {
+    currentClueStatusFilter = status || "全部状态";
+    currentClueFilter = currentClueStatusFilter === "待核验"
+        ? "pending"
+        : currentClueStatusFilter === "已转入真实库"
+            ? "approved"
+            : "custom";
+    updateFilterButtons();
+    renderClues(currentClues);
+}
+
+function setClueCategoryFilter(category) {
+    currentClueCategoryFilter = category || "全部分类";
+    currentClueExternalOnly = false;
+    renderClues(currentClues);
+}
+
+function setClueSourceFilter(source) {
+    currentClueSourceFilter = source || "全部来源";
+    renderClues(currentClues);
+}
+
+function showExternalCluesOnly() {
+    currentClueExternalOnly = true;
+    currentClueLinkedOnly = false;
+    currentClueCategoryFilter = "全部分类";
+    currentClueFilter = "custom";
+    updateFilterButtons();
+    updateAdvancedClueFilterInputs();
+    renderClues(currentClues);
+}
+
+function showLinkedCluesOnly() {
+    currentClueLinkedOnly = true;
+    currentClueExternalOnly = false;
+    currentClueFilter = "custom";
+    updateFilterButtons();
+    updateAdvancedClueFilterInputs();
+    renderClues(currentClues);
+}
+
+function clearClueFilters() {
+    currentClueFilter = "all";
+    currentClueStatusFilter = "全部状态";
+    currentClueCategoryFilter = "全部分类";
+    currentClueSourceFilter = "全部来源";
+    currentClueExternalOnly = false;
+    currentClueLinkedOnly = false;
+    updateFilterButtons();
+    updateAdvancedClueFilterInputs();
+    renderClues(currentClues);
+}
+
+function renderClueFilterOptions(items) {
+    currentClueCategoryFilter = normalizeClueFilterValue(
+        currentClueCategoryFilter,
+        "全部分类",
+        getUniqueClueValues(items, "category")
+    );
+    currentClueSourceFilter = normalizeClueFilterValue(
+        currentClueSourceFilter,
+        "全部来源",
+        getUniqueClueValues(items, "source_platform")
+    );
+
+    fillClueFilterSelect("clueCategoryFilter", "全部分类", getUniqueClueValues(items, "category"));
+    fillClueFilterSelect("clueSourceFilter", "全部来源", getUniqueClueValues(items, "source_platform"));
+    updateAdvancedClueFilterInputs();
+}
+
+function normalizeClueFilterValue(currentValue, defaultText, values) {
+    if (currentValue === defaultText || values.includes(currentValue)) {
+        return currentValue;
+    }
+
+    return defaultText;
+}
+
+function fillClueFilterSelect(id, defaultText, values) {
+    const select = document.getElementById(id);
+    if (!select) return;
+
+    const currentValue = select.value || defaultText;
+    select.innerHTML = [
+        `<option value="${escapeAttr(defaultText)}">${escapeHtml(defaultText)}</option>`,
+        ...values.map(value => `<option value="${escapeAttr(value)}">${escapeHtml(value)}</option>`)
+    ].join("");
+
+    select.value = values.includes(currentValue) || currentValue === defaultText ? currentValue : defaultText;
+}
+
+function getUniqueClueValues(items, field) {
+    return Array.from(new Set(
+        items
+            .map(item => (item[field] || "").trim())
+            .filter(Boolean)
+    )).sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+
+function updateAdvancedClueFilterInputs() {
+    setSelectValue("clueStatusFilter", currentClueStatusFilter);
+    setSelectValue("clueCategoryFilter", currentClueCategoryFilter);
+    setSelectValue("clueSourceFilter", currentClueSourceFilter);
+}
+
+function setSelectValue(id, value) {
+    const select = document.getElementById(id);
+    if (select) select.value = value;
 }
 
 async function submitClue() {
@@ -408,37 +537,39 @@ function renderClues(items) {
     const notice = document.getElementById("clueFilterNotice");
     if (!box || !notice) return;
 
-    let filteredItems = filterByCategory(items);
+    renderClueFilterOptions(items);
 
-    if (currentClueFilter === "pending") {
-        filteredItems = filteredItems.filter(item => item.status !== "已转入真实库");
-        notice.innerText = "当前筛选：只看待核验";
-    } else if (currentClueFilter === "approved") {
-        filteredItems = filteredItems.filter(item => item.status === "已转入真实库");
-        notice.innerText = "当前筛选：只看已转入真实库";
-    } else {
-        notice.innerText = "当前筛选：查看全部线索";
-    }
+    const baseItems = filterByCategory(items);
+    const filteredItems = applyClueFilters(baseItems);
+    const filterText = describeClueFilters();
+
+    notice.innerText = filterText;
+    renderClueFilterSummary(filteredItems.length, baseItems.length, filterText);
 
     if (filteredItems.length === 0) {
-        box.innerHTML = `<div class="empty">当前筛选下暂无线索结果</div>`;
+        box.innerHTML = `<div class="empty">当前筛选下暂无线索结果。可以清除筛选后查看全部线索。</div>`;
         return;
     }
 
     box.innerHTML = filteredItems.map(item => {
         const alreadyApproved = item.status === "已转入真实库";
+        const externalClue = isExternalClue(item);
+        const statusClass = getStatusTagClass(item.status);
+        const reviewTip = getClueReviewTip(item);
 
         return `
             <div class="card">
-                <div>
+                <div class="clue-card-tags">
                     <span class="tag warning">线索库</span>
-                    <span class="tag ${getStatusTagClass(item.status)}">${escapeHtml(item.status || "待核验")}</span>
+                    <span class="tag ${statusClass} clue-status-tag">${escapeHtml(item.status || "待核验")}</span>
                     <span class="tag">${escapeHtml(item.category || "未分类")}</span>
+                    ${externalClue ? `<span class="tag external-clue-tag">外部线索</span>` : ""}
                 </div>
                 <h3>${escapeHtml(item.title)}</h3>
-                <div>来源：${escapeHtml(item.source_platform || "未知来源")}</div>
-                <div>链接：${item.source_url ? `<a href="${escapeAttr(item.source_url)}" target="_blank">${escapeHtml(item.source_url)}</a>` : "暂无链接"}</div>
+                <div class="clue-source-line">来源平台：<strong>${escapeHtml(item.source_platform || "未知来源")}</strong></div>
+                <div class="clue-source-line">来源链接：${item.source_url ? `<a href="${escapeAttr(item.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.source_url)}</a>` : "暂无链接"}</div>
                 <div class="summary">${escapeHtml(item.summary || "暂无简介")}</div>
+                <div class="clue-review-tip ${getClueReviewTipClass(item)}">${escapeHtml(reviewTip)}</div>
 
                 <div class="action-row">
                     <div class="action-title">用户核验</div>
@@ -463,6 +594,95 @@ function renderClues(items) {
             </div>
         `;
     }).join("");
+}
+
+function applyClueFilters(items) {
+    return items.filter(item => {
+        const status = item.status || "待核验";
+        const category = item.category || "";
+        const source = item.source_platform || "";
+        const hasSourceUrl = Boolean(item.source_url);
+
+        if (currentClueStatusFilter !== "全部状态" && status !== currentClueStatusFilter) {
+            return false;
+        }
+
+        if (currentClueCategoryFilter !== "全部分类" && category !== currentClueCategoryFilter) {
+            return false;
+        }
+
+        if (currentClueSourceFilter !== "全部来源" && source !== currentClueSourceFilter) {
+            return false;
+        }
+
+        if (currentClueExternalOnly && !isExternalClue(item)) {
+            return false;
+        }
+
+        if (currentClueLinkedOnly && !hasSourceUrl) {
+            return false;
+        }
+
+        return true;
+    });
+}
+
+function describeClueFilters() {
+    const parts = [];
+
+    if (currentClueStatusFilter !== "全部状态") parts.push(`状态：${currentClueStatusFilter}`);
+    if (currentClueCategoryFilter !== "全部分类") parts.push(`分类：${currentClueCategoryFilter}`);
+    if (currentClueSourceFilter !== "全部来源") parts.push(`来源：${currentClueSourceFilter}`);
+    if (currentClueExternalOnly) parts.push("只看外部线索");
+    if (currentClueLinkedOnly) parts.push("只看有来源链接");
+
+    return parts.length ? `当前筛选：${parts.join("；")}` : "当前筛选：查看全部线索";
+}
+
+function renderClueFilterSummary(filteredCount, totalCount, filterText) {
+    const summary = document.getElementById("clueFilterSummary");
+    if (!summary) return;
+
+    summary.innerHTML = `
+        <strong>${filteredCount}</strong> / 共 ${totalCount} 条线索
+        <span>${escapeHtml(filterText.replace("当前筛选：", ""))}</span>
+    `;
+}
+
+function isExternalClue(item) {
+    const category = item.category || "";
+    const sourcePlatform = item.source_platform || "";
+    return category === "外部线索" || Boolean(sourcePlatform) || Boolean(item.source_url);
+}
+
+function getClueReviewTip(item) {
+    const status = item.status || "待核验";
+
+    if (status === "已转入真实库") {
+        return "该线索已进入真实库，避免重复审核或重复同步。";
+    }
+
+    if (status === "已归档") {
+        return "该线索已归档，如需继续处理请先人工确认。";
+    }
+
+    if (isExternalClue(item)) {
+        return "该线索来自外部采集或公开来源，需人工核验来源与摘要后再处理。";
+    }
+
+    if (status === "待核验") {
+        return "建议核对来源与摘要后再审核。";
+    }
+
+    return "请结合用户核验状态、来源与摘要进行人工判断。";
+}
+
+function getClueReviewTipClass(item) {
+    const status = item.status || "待核验";
+    if (status === "已转入真实库") return "clue-review-tip-approved";
+    if (status === "已归档") return "clue-review-tip-archived";
+    if (isExternalClue(item)) return "clue-review-tip-external";
+    return "";
 }
 
 function getStatusTagClass(status) {

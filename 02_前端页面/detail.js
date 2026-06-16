@@ -28,25 +28,36 @@ async function loadClueDetail() {
             return;
         }
 
+        const status = item.status || "待核验";
+        const externalClue = isDetailExternalClue(item);
+        const statusTip = getDetailReviewTip(item);
+
         box.innerHTML = `
-            <div class="card">
-                <div>
+            <div class="card clue-detail-card">
+                <div class="clue-card-tags">
                     <span class="tag warning">线索库</span>
                     <span class="tag">${escapeHtml(item.category || "未分类")}</span>
-                    <span class="tag ${getStatusTagClass(item.status)}">${escapeHtml(item.status || "待核验")}</span>
+                    <span class="tag ${getStatusTagClass(status)} clue-status-tag">${escapeHtml(status)}</span>
+                    ${externalClue ? `<span class="tag external-clue-tag">外部线索</span>` : ""}
                 </div>
 
                 <h2>${escapeHtml(item.title)}</h2>
 
-                <p><strong>ID：</strong>${item.id}</p>
-                <p><strong>来源平台：</strong>${escapeHtml(item.source_platform || "未知来源")}</p>
-                <p><strong>来源链接：</strong>${item.source_url ? `<a href="${escapeAttr(item.source_url)}" target="_blank">${escapeHtml(item.source_url)}</a>` : "暂无链接"}</p>
-                <p><strong>创建时间：</strong>${escapeHtml(item.created_at || "未知")}</p>
+                <div class="clue-detail-meta">
+                    <div><strong>ID：</strong>${item.id}</div>
+                    <div><strong>当前状态：</strong>${escapeHtml(status)}</div>
+                    <div><strong>分类：</strong>${escapeHtml(item.category || "未分类")}</div>
+                    <div><strong>来源平台：</strong>${escapeHtml(item.source_platform || "未知来源")}</div>
+                    <div><strong>来源链接：</strong>${item.source_url ? `<a href="${escapeAttr(item.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.source_url)}</a>` : "暂无链接"}</div>
+                    <div><strong>创建时间：</strong>${escapeHtml(item.created_at || "未知")}</div>
+                </div>
 
                 <div class="summary">
                     <strong>线索简介：</strong><br>
                     ${escapeHtml(item.summary || "暂无简介")}
                 </div>
+
+                <div class="clue-review-tip ${getDetailReviewTipClass(item)}">${escapeHtml(statusTip)}</div>
 
                 <div class="action-row">
                     <div class="action-title">用户核验</div>
@@ -242,6 +253,42 @@ function getStatusTagClass(status) {
     if (status.includes("不准确") || status.includes("过期") || status.includes("归档")) return "danger-tag";
     if (status.includes("已转入真实库")) return "tag";
     return "warning";
+}
+
+function isDetailExternalClue(item) {
+    const category = item.category || "";
+    const sourcePlatform = item.source_platform || "";
+    return category === "外部线索" || Boolean(sourcePlatform) || Boolean(item.source_url);
+}
+
+function getDetailReviewTip(item) {
+    const status = item.status || "待核验";
+
+    if (status === "已转入真实库") {
+        return "该线索已转入真实库，谨慎重复处理。";
+    }
+
+    if (status === "已归档") {
+        return "该线索已归档，如需继续处理请先人工确认。";
+    }
+
+    if (isDetailExternalClue(item)) {
+        return "该线索来自外部采集/公开来源，请人工核验后再转入真实库。";
+    }
+
+    if (status === "待核验") {
+        return "建议核对来源与摘要后再审核。";
+    }
+
+    return "请结合来源、摘要、反馈和历史记录进行人工判断。";
+}
+
+function getDetailReviewTipClass(item) {
+    const status = item.status || "待核验";
+    if (status === "已转入真实库") return "clue-review-tip-approved";
+    if (status === "已归档") return "clue-review-tip-archived";
+    if (isDetailExternalClue(item)) return "clue-review-tip-external";
+    return "";
 }
 
 function escapeHtml(text) {

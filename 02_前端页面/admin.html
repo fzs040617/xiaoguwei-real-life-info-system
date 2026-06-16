@@ -70,13 +70,52 @@
             <button id="filterAll" class="small-button filter-button" onclick="setClueFilter('all')">查看全部线索</button>
         </div>
 
+        <div class="clue-filter-panel">
+            <div class="clue-filter-grid">
+                <label>
+                    <span>状态</span>
+                    <select id="clueStatusFilter" onchange="setClueStatusFilter(this.value)">
+                        <option value="全部状态">全部状态</option>
+                        <option value="待核验">待核验</option>
+                        <option value="已转入真实库">已转入真实库</option>
+                        <option value="已归档">已归档</option>
+                        <option value="用户核验：属实">用户核验：属实</option>
+                        <option value="用户核验：不准确">用户核验：不准确</option>
+                        <option value="用户反馈：已过期">用户反馈：已过期</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>分类</span>
+                    <select id="clueCategoryFilter" onchange="setClueCategoryFilter(this.value)">
+                        <option value="全部分类">全部分类</option>
+                    </select>
+                </label>
+
+                <label>
+                    <span>来源平台</span>
+                    <select id="clueSourceFilter" onchange="setClueSourceFilter(this.value)">
+                        <option value="全部来源">全部来源</option>
+                    </select>
+                </label>
+            </div>
+
+            <div class="clue-filter-actions">
+                <button class="small-button filter-button" onclick="showExternalCluesOnly()">只看外部线索</button>
+                <button class="small-button filter-button" onclick="showLinkedCluesOnly()">只看有来源链接</button>
+                <button class="small-button filter-button" onclick="clearClueFilters()">清除筛选 / 显示全部</button>
+            </div>
+
+            <div id="clueFilterSummary" class="clue-filter-summary">正在统计线索筛选条件...</div>
+        </div>
+
         <div id="clueFilterNotice" class="empty">当前筛选：只看待核验</div>
         <div id="clueResults" class="empty">正在加载线索库内容...</div>
     </div>
 
 </div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=20260616-clue-filter"></script>
 <script src="archive-filter.js"></script>
 <script src="detail-link.js"></script>
 <script src="history-auto.js?v=19"></script>

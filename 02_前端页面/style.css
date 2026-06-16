@@ -1076,3 +1076,122 @@ body:not(.xgw-backup-page) #backupImportLayout {
     display: none !important;
     visibility: hidden !important;
 }
+
+.clue-filter-panel {
+    border: 1px solid #dcece4;
+    background: #f7faf8;
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+}
+
+.clue-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+    gap: 12px;
+}
+
+.clue-filter-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: #335247;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.clue-filter-grid select {
+    min-height: 38px;
+}
+
+.clue-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.clue-filter-summary {
+    margin-top: 10px;
+    color: #3f5f52;
+    font-size: 14px;
+}
+
+.clue-filter-summary strong {
+    color: #1f7a4d;
+}
+
+.clue-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.external-clue-tag {
+    background: #eaf2ff;
+    border: 1px solid #b8cffb;
+    color: #1f5fc0;
+}
+
+.clue-status-tag {
+    font-weight: 700;
+}
+
+.clue-source-line {
+    margin: 6px 0;
+    color: #3f4b45;
+    word-break: break-word;
+}
+
+.clue-review-tip {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border: 1px solid #dcece4;
+    background: #fbfdfc;
+    border-radius: 8px;
+    color: #365448;
+    line-height: 1.6;
+}
+
+.clue-review-tip-external {
+    background: #f0f6ff;
+    border-color: #c7d9fb;
+    color: #244f91;
+}
+
+.clue-review-tip-approved {
+    background: #eef7f2;
+    border-color: #b9dcc9;
+    color: #1f7a4d;
+}
+
+.clue-review-tip-archived {
+    background: #fff7ed;
+    border-color: #f1caa0;
+    color: #925313;
+}
+
+.detail-return-row {
+    margin-bottom: 12px;
+}
+
+.clue-detail-card h2 {
+    margin-top: 12px;
+}
+
+.clue-detail-meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+    gap: 8px 16px;
+    margin: 12px 0;
+    color: #3f4b45;
+    word-break: break-word;
+}
+
+@media (max-width: 760px) {
+    .clue-filter-grid,
+    .clue-detail-meta {
+        grid-template-columns: 1fr;
+    }
+}
