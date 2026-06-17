@@ -165,6 +165,35 @@ button:hover {
     background: #1f5fc0;
 }
 
+.xgw-verify-code-panel {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.xgw-verify-code {
+    background: #eef8f2;
+    border: 1px solid #b9dcc9;
+    border-radius: 6px;
+    color: #1f7a4d;
+    cursor: pointer;
+    display: inline-block;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    line-height: 1.2;
+    min-width: 110px;
+    padding: 6px 10px;
+    text-align: center;
+    user-select: none;
+}
+
+.xgw-verify-code:hover {
+    background: #dff0e7;
+}
+
 .warn-button {
     background: #d68910;
 }

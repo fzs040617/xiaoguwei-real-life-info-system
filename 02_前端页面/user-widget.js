@@ -6,6 +6,7 @@ const USER_TOKEN_KEY = "xgw_user_token";
 
 let currentUser = null;
 let editingAvatarBase64 = "";
+let switchingAccountSnapshot = null;
 
 window.addEventListener("load", () => {
     injectUserWidgetStyle();
@@ -170,15 +171,60 @@ function injectUserWidgetStyle() {
         .user-modal {
             width: 460px;
             max-width: 92%;
+            max-height: calc(100vh - 32px);
             background: #fff;
             border-radius: 14px;
-            padding: 22px;
+            padding: 0;
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
         }
 
-        .user-modal h2 {
-            margin-top: 0;
+        .user-modal-header {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 22px 14px;
+            border-bottom: 1px solid #eef1ee;
+            background: #fff;
+        }
+
+        .user-modal-header h2 {
+            margin: 0;
             color: #1f7a4d;
+        }
+
+        .user-modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            padding: 18px 22px;
+            overflow-y: auto;
+        }
+
+        .user-modal-close {
+            flex: 0 0 auto;
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 50%;
+            background: #eef8f2;
+            color: #1f7a4d;
+            cursor: pointer;
+            font-size: 20px;
+            line-height: 1;
+        }
+
+        .user-modal-footer {
+            flex: 0 0 auto;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 14px 22px 18px;
+            border-top: 1px solid #eef1ee;
+            background: #fff;
         }
 
         .user-avatar-preview {
@@ -334,8 +380,15 @@ function closeUserMenu() {
     }
 }
 
-function openLoginModal() {
+function openLoginModal(options = {}) {
     closeUserMenu();
+
+    const nextSwitchingAccountSnapshot = options.switchAccount
+        ? {
+            token: localStorage.getItem(USER_TOKEN_KEY),
+            user: currentUser ? {...currentUser} : null
+        }
+        : null;
 
     showUserModal(`
         <h2>登录</h2>
@@ -357,6 +410,8 @@ function openLoginModal() {
             <button class="user-menu-button" style="width:auto; margin-top:0;" onclick="loginUser()">登录</button>
         </div>
     `);
+
+    switchingAccountSnapshot = nextSwitchingAccountSnapshot;
 }
 
 function openRegisterModal() {
@@ -455,12 +510,57 @@ function showUserModal(innerHtml) {
     mask.className = "user-modal-mask";
     mask.id = "userModalMask";
 
-    mask.innerHTML = `
-        <div class="user-modal">
-            ${innerHtml}
-        </div>
-    `;
+    const source = document.createElement("div");
+    source.innerHTML = innerHtml;
 
+    const modal = document.createElement("div");
+    modal.className = "user-modal";
+
+    const header = document.createElement("div");
+    header.className = "user-modal-header";
+
+    const title = source.querySelector("h2");
+    if (title) {
+        title.remove();
+        header.appendChild(title);
+    } else {
+        const fallbackTitle = document.createElement("h2");
+        fallbackTitle.innerText = "";
+        header.appendChild(fallbackTitle);
+    }
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "user-modal-close";
+    closeButton.setAttribute("aria-label", "关闭");
+    closeButton.innerText = "×";
+    closeButton.onclick = closeUserModal;
+    header.appendChild(closeButton);
+
+    const body = document.createElement("div");
+    body.className = "user-modal-body";
+
+    const footer = document.createElement("div");
+    footer.className = "user-modal-footer";
+
+    const actions = source.querySelector(".user-modal-actions");
+    if (actions) {
+        actions.remove();
+        footer.innerHTML = actions.innerHTML;
+    }
+
+    while (source.firstChild) {
+        body.appendChild(source.firstChild);
+    }
+
+    modal.appendChild(header);
+    modal.appendChild(body);
+
+    if (footer.children.length > 0) {
+        modal.appendChild(footer);
+    }
+
+    mask.appendChild(modal);
     document.body.appendChild(mask);
 }
 
@@ -470,6 +570,8 @@ function closeUserModal() {
     if (mask) {
         mask.remove();
     }
+
+    restoreSwitchingAccountSnapshot();
 }
 
 function readUserAvatarFile(event, previewId) {
@@ -562,12 +664,14 @@ async function loginUser() {
         const data = await response.json();
 
         if (!response.ok) {
+            restoreSwitchingAccountSnapshot({keepPending: true});
             setUserModalMessage("登录失败：" + JSON.stringify(data));
             return;
         }
 
         localStorage.setItem(USER_TOKEN_KEY, data.token);
         currentUser = data.data;
+        switchingAccountSnapshot = null;
 
         closeUserModal();
         renderUserWidget();
@@ -577,6 +681,7 @@ async function loginUser() {
         alert("登录成功。");
 
     } catch (error) {
+        restoreSwitchingAccountSnapshot({keepPending: true});
         setUserModalMessage("登录失败，请确认后端已启动：" + error.message);
     }
 }
@@ -663,18 +768,36 @@ async function logoutUser() {
 }
 
 function switchAccount() {
-    clearUserWidgetAuthState();
     closeUserMenu();
-    renderUserWidget();
-    renderUserMenu();
-    notifyUserWidgetAuthChanged();
-    openLoginModal();
+    openLoginModal({switchAccount: true});
 }
 
 function clearUserWidgetAuthState() {
     localStorage.removeItem(USER_TOKEN_KEY);
     currentUser = null;
     editingAvatarBase64 = "";
+}
+
+function restoreSwitchingAccountSnapshot(options = {}) {
+    if (!switchingAccountSnapshot) {
+        return;
+    }
+
+    const snapshot = switchingAccountSnapshot;
+
+    if (snapshot.token) {
+        localStorage.setItem(USER_TOKEN_KEY, snapshot.token);
+    } else {
+        localStorage.removeItem(USER_TOKEN_KEY);
+    }
+
+    currentUser = snapshot.user ? {...snapshot.user} : null;
+    renderUserWidget();
+    renderUserMenu();
+
+    if (!options.keepPending) {
+        switchingAccountSnapshot = null;
+    }
 }
 
 function notifyUserWidgetAuthChanged() {
@@ -717,4 +840,8 @@ function escapeUserWidgetAttr(text) {
         .replace(/"/g, "&quot;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
+}
+
+if (typeof window.installUserWidgetV2Overrides === "function") {
+    window.installUserWidgetV2Overrides();
 }

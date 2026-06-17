@@ -5,6 +5,8 @@
 
 const HISTORY_DANGER_API = "http://127.0.0.1:8000";
 const HISTORY_USER_TOKEN_KEY = "xgw_user_token";
+let historyClearAllVerifyToken = "";
+let historyClearRangeVerifyToken = "";
 
 window.addEventListener("load", () => {
     setTimeout(checkAndInjectHistoryDangerButton, 800);
@@ -85,6 +87,15 @@ function injectHistoryDangerButton() {
                 <label>确认文字</label>
                 <input id="clearHistoryRangeConfirmText" placeholder="必须输入：清空历史" oninput="clearHistoryRangeMessage()">
             </div>
+            <div class="form-row">
+                <label>动态验证码</label>
+                <div class="xgw-verify-code-panel">
+                    <span class="tag">验证码</span>
+                    <strong id="clearHistoryRangeVerifyDisplay" class="xgw-verify-code" onclick="loadHistoryDangerVerifyCode('history_clear_range')" title="点击刷新验证码">点击获取</strong>
+                    <button type="button" class="small-button filter-button" onclick="loadHistoryDangerVerifyCode('history_clear_range')">刷新</button>
+                </div>
+                <input id="clearHistoryRangeVerifyCode" placeholder="请输入上方动态验证码" oninput="clearHistoryRangeMessage()">
+            </div>
             <div id="clearHistoryRangeMessage" class="message"></div>
             <button class="danger-button" onclick="clearRangeUpdateHistory()">清空所选区间历史</button>
         </div>
@@ -99,6 +110,7 @@ function injectHistoryDangerButton() {
     }
 
     initHistoryDangerDateInputs();
+    loadHistoryDangerVerifyCode("history_clear_range");
 }
 
 function initHistoryDangerDateInputs() {
@@ -163,6 +175,68 @@ function openHistoryDatePicker(input) {
     }
 }
 
+async function loadHistoryDangerVerifyCode(purpose) {
+    const token = localStorage.getItem(HISTORY_USER_TOKEN_KEY) || "";
+    const purposeText = String(purpose || "");
+    const isRange = purposeText === "history_clear_range";
+    const display = document.getElementById(isRange ? "clearHistoryRangeVerifyDisplay" : "clearHistoryVerifyDisplay");
+    const input = document.getElementById(isRange ? "clearHistoryRangeVerifyCode" : "clearHistoryVerifyCode");
+
+    if (display) {
+        display.innerText = "加载中...";
+    }
+
+    try {
+        const response = await fetch(`${HISTORY_DANGER_API}/admin/verify-code?purpose=${encodeURIComponent(purposeText)}&token=${encodeURIComponent(token)}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            if (isRange) {
+                historyClearRangeVerifyToken = "";
+                setHistoryRangeMessage("验证码加载失败：" + getHistoryDangerErrorMessage(data));
+            } else {
+                historyClearAllVerifyToken = "";
+                const message = document.getElementById("clearHistoryMessage");
+                if (message) {
+                    message.innerText = "验证码加载失败：" + getHistoryDangerErrorMessage(data);
+                }
+            }
+            if (display) {
+                display.innerText = "加载失败";
+            }
+            return;
+        }
+
+        if (isRange) {
+            historyClearRangeVerifyToken = data.verify_token || "";
+        } else {
+            historyClearAllVerifyToken = data.verify_token || "";
+        }
+
+        if (display) {
+            display.innerText = data.verify_code || "点击刷新";
+        }
+
+        if (input) {
+            input.value = "";
+        }
+    } catch (error) {
+        if (isRange) {
+            historyClearRangeVerifyToken = "";
+            setHistoryRangeMessage("验证码加载失败：" + error.message);
+        } else {
+            historyClearAllVerifyToken = "";
+            const message = document.getElementById("clearHistoryMessage");
+            if (message) {
+                message.innerText = "验证码加载失败：" + error.message;
+            }
+        }
+        if (display) {
+            display.innerText = "加载失败";
+        }
+    }
+}
+
 function handleHistoryRangeDateInput(input) {
     clearHistoryRangeMessage();
 
@@ -177,6 +251,30 @@ function handleHistoryRangeDateInput(input) {
 
     if (input.value && !isValidHistoryRangeDate(input.value)) {
         input.value = "";
+    }
+
+    if (input.id === "clearHistoryRangeStartDate") {
+        syncHistoryRangeEndDate();
+    }
+}
+
+function syncHistoryRangeEndDate() {
+    const startInput = document.getElementById("clearHistoryRangeStartDate");
+    const endInput = document.getElementById("clearHistoryRangeEndDate");
+
+    if (!startInput || !endInput) {
+        return;
+    }
+
+    if (!isValidHistoryRangeDate(startInput.value)) {
+        endInput.min = "2000-01-01";
+        return;
+    }
+
+    endInput.min = startInput.value;
+
+    if (!endInput.value || endInput.value < startInput.value) {
+        endInput.value = startInput.value;
     }
 }
 
@@ -278,6 +376,16 @@ function openClearHistoryModal() {
                 <input id="clearHistoryConfirmText" placeholder="请输入：清空历史">
             </div>
 
+            <div class="form-row">
+                <label>动态验证码</label>
+                <div class="xgw-verify-code-panel">
+                    <span class="tag">验证码</span>
+                    <strong id="clearHistoryVerifyDisplay" class="xgw-verify-code" onclick="loadHistoryDangerVerifyCode('history_clear_all')" title="点击刷新验证码">点击获取</strong>
+                    <button type="button" class="small-button filter-button" onclick="loadHistoryDangerVerifyCode('history_clear_all')">刷新</button>
+                </div>
+                <input id="clearHistoryVerifyCode" placeholder="请输入上方动态验证码">
+            </div>
+
             <div id="clearHistoryMessage" class="message"></div>
 
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
@@ -306,6 +414,8 @@ function openClearHistoryModal() {
     `;
 
     document.body.appendChild(mask);
+    historyClearAllVerifyToken = "";
+    loadHistoryDangerVerifyCode("history_clear_all");
 }
 
 function closeClearHistoryModal() {
@@ -320,6 +430,7 @@ async function clearAllUpdateHistory() {
     const token = localStorage.getItem(HISTORY_USER_TOKEN_KEY);
     const systemPassword = document.getElementById("clearHistorySystemPassword").value.trim();
     const confirmText = document.getElementById("clearHistoryConfirmText").value.trim();
+    const verifyCode = document.getElementById("clearHistoryVerifyCode").value.trim().toUpperCase();
     const message = document.getElementById("clearHistoryMessage");
 
     if (!token) {
@@ -334,6 +445,16 @@ async function clearAllUpdateHistory() {
 
     if (confirmText !== "清空历史") {
         alert("确认文字不正确，请输入：清空历史");
+        return;
+    }
+
+    if (!historyClearAllVerifyToken) {
+        alert("请先获取动态验证码。");
+        return;
+    }
+
+    if (!verifyCode) {
+        alert("请输入动态验证码。");
         return;
     }
 
@@ -358,7 +479,9 @@ async function clearAllUpdateHistory() {
             body: JSON.stringify({
                 token: token,
                 system_password: systemPassword,
-                confirm_text: confirmText
+                confirm_text: confirmText,
+                verify_token: historyClearAllVerifyToken,
+                verify_code: verifyCode
             })
         });
 
@@ -418,6 +541,7 @@ async function clearRangeUpdateHistory() {
     const endDate = document.getElementById("clearHistoryRangeEndDate").value.trim();
     const systemPassword = document.getElementById("clearHistoryRangeSystemPassword").value.trim();
     const confirmText = document.getElementById("clearHistoryRangeConfirmText").value.trim();
+    const verifyCode = document.getElementById("clearHistoryRangeVerifyCode").value.trim().toUpperCase();
     clearHistoryRangeMessage();
 
     if (!token) {
@@ -438,6 +562,16 @@ async function clearRangeUpdateHistory() {
 
     if (confirmText !== "清空历史") {
         setHistoryRangeMessage("确认文字不正确，请输入：清空历史");
+        return;
+    }
+
+    if (!historyClearRangeVerifyToken) {
+        setHistoryRangeMessage("请先获取动态验证码。");
+        return;
+    }
+
+    if (!verifyCode) {
+        setHistoryRangeMessage("请输入动态验证码。");
         return;
     }
 
@@ -464,7 +598,9 @@ async function clearRangeUpdateHistory() {
                 system_password: systemPassword,
                 confirm_text: confirmText,
                 start_date: startDate,
-                end_date: endDate
+                end_date: endDate,
+                verify_token: historyClearRangeVerifyToken,
+                verify_code: verifyCode
             })
         });
 

@@ -2662,7 +2662,94 @@ def import_backup_data(
         "detail": result
     }
 
-BACKUP_IMPORT_VERIFY_CODES = {}
+ADMIN_VERIFY_CODE_TTL_SECONDS = 5 * 60
+ADMIN_VERIFY_PURPOSES = {
+    "admin_register",
+    "user_role_change",
+    "backup_import",
+    "history_clear_all",
+    "history_clear_range",
+}
+ADMIN_VERIFY_CODES = {}
+BACKUP_IMPORT_VERIFY_CODES = ADMIN_VERIFY_CODES
+
+
+def create_admin_verify_code(purpose: str):
+    import random
+    import string
+    from uuid import uuid4
+
+    purpose_text = (purpose or "").strip()
+    if purpose_text not in ADMIN_VERIFY_PURPOSES:
+        raise HTTPException(status_code=400, detail="验证码用途不支持")
+
+    verify_token = uuid4().hex
+    verify_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+
+    ADMIN_VERIFY_CODES[verify_token] = {
+        "code": verify_code,
+        "purpose": purpose_text,
+        "created_at": datetime.now()
+    }
+
+    return verify_token, verify_code
+
+
+def verify_admin_code(verify_token: str, verify_code: str, purpose: str):
+    token_text = (verify_token or "").strip()
+    code_text = (verify_code or "").strip().upper()
+    purpose_text = (purpose or "").strip()
+
+    if not token_text or not code_text:
+        raise HTTPException(status_code=400, detail="请先获取验证码")
+
+    item = ADMIN_VERIFY_CODES.get(token_text)
+
+    if not item:
+        raise HTTPException(status_code=400, detail="验证码已过期，请刷新")
+
+    created_at = item.get("created_at")
+    if not isinstance(created_at, datetime) or datetime.now() - created_at > timedelta(seconds=ADMIN_VERIFY_CODE_TTL_SECONDS):
+        ADMIN_VERIFY_CODES.pop(token_text, None)
+        raise HTTPException(status_code=400, detail="验证码已过期，请刷新")
+
+    if item.get("purpose") != purpose_text:
+        raise HTTPException(status_code=400, detail="验证码用途不匹配")
+
+    if code_text != item.get("code"):
+        raise HTTPException(status_code=400, detail="验证码错误")
+
+    ADMIN_VERIFY_CODES.pop(token_text, None)
+
+
+@app.get("/admin/verify-code")
+def get_admin_verify_code(
+    purpose: str = Query(""),
+    token: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    purpose_text = (purpose or "").strip()
+
+    if purpose_text not in ADMIN_VERIFY_PURPOSES:
+        raise HTTPException(status_code=400, detail="验证码用途不支持")
+
+    if purpose_text != "admin_register":
+        try:
+            require_admin_token(db, token)
+        except HTTPException as exc:
+            if exc.status_code in (401, 403):
+                raise HTTPException(status_code=403, detail="只有管理员可以获取该操作验证码")
+            raise
+
+    verify_token, verify_code = create_admin_verify_code(purpose_text)
+
+    return {
+        "message": "验证码已生成",
+        "verify_token": verify_token,
+        "verify_code": verify_code,
+        "purpose": purpose_text,
+        "expires_in_seconds": ADMIN_VERIFY_CODE_TTL_SECONDS
+    }
 
 
 @app.get("/backup/import-code")
@@ -2671,19 +2758,14 @@ def get_backup_import_code(
     db: Session = Depends(get_db)
 ):
     require_admin_token(db, token)
-    import random
-    import string
-    from uuid import uuid4
-
-    token = uuid4().hex
-    code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-
-    BACKUP_IMPORT_VERIFY_CODES[token] = code
+    verify_token, verify_code = create_admin_verify_code("backup_import")
 
     return {
         "message": "备份导入验证码已生成",
-        "verify_token": token,
-        "verify_code": code
+        "verify_token": verify_token,
+        "verify_code": verify_code,
+        "purpose": "backup_import",
+        "expires_in_seconds": ADMIN_VERIFY_CODE_TTL_SECONDS
     }
 
 
@@ -2702,6 +2784,8 @@ def import_backup_data_v2(
 ):
     require_admin_token(db, request.token)
     verify_system_password(request.password)
+    verify_admin_code(request.verify_token, request.verify_code, "backup_import")
+    BACKUP_IMPORT_VERIFY_CODES[request.verify_token] = request.verify_code.strip().upper()
 
     server_code = BACKUP_IMPORT_VERIFY_CODES.get(request.verify_token)
 
@@ -2984,6 +3068,8 @@ class AuthRegisterV2Request(BaseModel):
     avatar_base64: Optional[str] = None
     role: Optional[str] = "user"
     admin_password: Optional[str] = None
+    verify_token: Optional[str] = None
+    verify_code: Optional[str] = None
 
 
 class AuthUpdateV2Request(BaseModel):
@@ -3001,6 +3087,8 @@ class AuthUserRoleAdminRequest(BaseModel):
     system_password: str = ""
     new_role: str = ""
     confirm_text: str = ""
+    verify_token: str = ""
+    verify_code: str = ""
 
 
 @app.post("/auth/register-v2")
@@ -3025,6 +3113,7 @@ def register_user_v2(
 
     if role == "admin":
         verify_system_password(request.admin_password or "")
+        verify_admin_code(request.verify_token or "", request.verify_code or "", "admin_register")
 
     existing = db.query(AuthUser).filter(AuthUser.account == account).first()
 
@@ -3167,6 +3256,8 @@ class ClearUpdateHistoryAdminV2Request(BaseModel):
     token: str
     system_password: str
     confirm_text: str
+    verify_token: str = ""
+    verify_code: str = ""
 
 
 class ClearUpdateHistoryRangeAdminRequest(BaseModel):
@@ -3175,6 +3266,8 @@ class ClearUpdateHistoryRangeAdminRequest(BaseModel):
     confirm_text: str = ""
     start_date: str = ""
     end_date: str = ""
+    verify_token: str = ""
+    verify_code: str = ""
 
 
 def require_admin_user(db: Session, token: str):
@@ -3266,6 +3359,7 @@ def update_auth_user_role_admin(
 ):
     admin_user = require_admin_user(db, request.token)
     verify_system_password(request.system_password)
+    verify_admin_code(request.verify_token, request.verify_code, "user_role_change")
 
     if request.confirm_text != "修改角色":
         raise HTTPException(status_code=400, detail="确认文字错误，请输入：修改角色")
@@ -3303,6 +3397,7 @@ def clear_all_update_history_admin_v2(
 ):
     user = require_admin_user(db, request.token)
     verify_system_password(request.system_password)
+    verify_admin_code(request.verify_token, request.verify_code, "history_clear_all")
 
     if request.confirm_text != "清空历史":
         raise HTTPException(status_code=400, detail="确认文字错误，请输入：清空历史")
@@ -3326,6 +3421,7 @@ def clear_range_update_history_admin(
 ):
     user = require_admin_user(db, request.token)
     verify_system_password(request.system_password)
+    verify_admin_code(request.verify_token, request.verify_code, "history_clear_range")
 
     if request.confirm_text != "清空历史":
         raise HTTPException(status_code=400, detail="确认文字错误，请输入：清空历史")
@@ -3384,6 +3480,8 @@ def import_backup_data_v3(
 ):
     user = require_admin_user(db, request.token)
     verify_system_password(request.system_password)
+    verify_admin_code(request.verify_token, request.verify_code, "backup_import")
+    BACKUP_IMPORT_VERIFY_CODES[request.verify_token] = request.verify_code.strip().upper()
 
     server_code = BACKUP_IMPORT_VERIFY_CODES.get(request.verify_token)
 

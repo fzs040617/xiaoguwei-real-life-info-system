@@ -10,6 +10,7 @@ let userRoleEditingUser = null;
 let userAdminPage = 1;
 let userAdminPageSize = 20;
 let userAdminTotal = 0;
+let userRoleVerifyToken = "";
 
 async function initUserAdminPage() {
     const token = getUserAdminToken();
@@ -203,6 +204,8 @@ function openUserRoleModal(userId) {
     const newRole = document.getElementById("userRoleNewRole");
     const password = document.getElementById("userRoleSystemPassword");
     const confirmText = document.getElementById("userRoleConfirmText");
+    const verifyCode = document.getElementById("userRoleVerifyCode");
+    const verifyDisplay = document.getElementById("userRoleVerifyDisplay");
     const message = document.getElementById("userRoleModalMessage");
     const mask = document.getElementById("userRoleModalMask");
 
@@ -218,6 +221,16 @@ function openUserRoleModal(userId) {
         confirmText.value = "";
     }
 
+    if (verifyCode) {
+        verifyCode.value = "";
+    }
+
+    if (verifyDisplay) {
+        verifyDisplay.innerText = "点击获取";
+    }
+
+    userRoleVerifyToken = "";
+
     if (message) {
         message.innerText = "";
         message.style.color = "";
@@ -227,6 +240,46 @@ function openUserRoleModal(userId) {
 
     if (mask) {
         mask.style.display = "flex";
+    }
+
+    loadUserRoleVerifyCode();
+}
+
+async function loadUserRoleVerifyCode() {
+    const display = document.getElementById("userRoleVerifyDisplay");
+    const input = document.getElementById("userRoleVerifyCode");
+    const token = getUserAdminToken();
+
+    if (display) {
+        display.innerText = "加载中...";
+    }
+
+    try {
+        const response = await fetch(`${USER_ADMIN_API}/admin/verify-code?purpose=user_role_change&token=${encodeURIComponent(token)}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            userRoleVerifyToken = "";
+            if (display) {
+                display.innerText = "加载失败";
+            }
+            setUserRoleModalMessage("验证码加载失败：" + formatUserAdminError(data), true);
+            return;
+        }
+
+        userRoleVerifyToken = data.verify_token || "";
+        if (display) {
+            display.innerText = data.verify_code || "点击刷新";
+        }
+        if (input) {
+            input.value = "";
+        }
+    } catch (error) {
+        userRoleVerifyToken = "";
+        if (display) {
+            display.innerText = "加载失败";
+        }
+        setUserRoleModalMessage("验证码加载失败：" + formatUserAdminNetworkError(error), true);
     }
 }
 
@@ -268,6 +321,7 @@ async function submitUserRoleChange() {
     const newRole = document.getElementById("userRoleNewRole")?.value || "";
     const systemPassword = document.getElementById("userRoleSystemPassword")?.value || "";
     const confirmText = document.getElementById("userRoleConfirmText")?.value || "";
+    const verifyCode = document.getElementById("userRoleVerifyCode")?.value.trim().toUpperCase() || "";
 
     if (!systemPassword) {
         setUserRoleModalMessage("请输入系统密码。系统密码请从部署配置或管理员处获取。", true);
@@ -279,6 +333,16 @@ async function submitUserRoleChange() {
         return;
     }
 
+    if (!userRoleVerifyToken) {
+        setUserRoleModalMessage("请先获取动态验证码。", true);
+        return;
+    }
+
+    if (!verifyCode) {
+        setUserRoleModalMessage("请输入动态验证码。", true);
+        return;
+    }
+
     try {
         const response = await fetch(`${USER_ADMIN_API}/auth/users/${encodeURIComponent(userRoleEditingUser.id)}/role-admin`, {
             method: "PATCH",
@@ -287,7 +351,9 @@ async function submitUserRoleChange() {
                 token,
                 system_password: systemPassword,
                 new_role: newRole,
-                confirm_text: confirmText
+                confirm_text: confirmText,
+                verify_token: userRoleVerifyToken,
+                verify_code: verifyCode
             })
         });
         const data = await response.json();

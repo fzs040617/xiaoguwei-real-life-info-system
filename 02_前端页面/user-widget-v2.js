@@ -6,6 +6,8 @@
 // 4. 修改密码必须输入原密码
 // 5. 继续复用 user-widget.js 的右上角头像和菜单
 
+let registerAdminVerifyToken = "";
+
 window.openRegisterModal = function () {
     closeUserMenu();
     editingAvatarBase64 = "";
@@ -41,6 +43,16 @@ window.openRegisterModal = function () {
             <input id="registerAdminPassword" type="password" placeholder="请输入系统密码">
         </div>
 
+        <div class="form-row" id="registerAdminVerifyRow" style="display:none;">
+            <label>动态验证码，注册管理员必填</label>
+            <div class="xgw-verify-code-panel">
+                <span class="tag">验证码</span>
+                <strong id="registerAdminVerifyDisplay" class="xgw-verify-code" onclick="loadRegisterAdminVerifyCode()" title="点击刷新验证码">点击获取</strong>
+                <button type="button" class="small-button filter-button" onclick="loadRegisterAdminVerifyCode()">刷新</button>
+            </div>
+            <input id="registerAdminVerifyCode" placeholder="请输入上方动态验证码">
+        </div>
+
         <div class="form-row">
             <label>账号</label>
             <input id="registerAccount" placeholder="只能英文大小写、数字、常用标点">
@@ -68,9 +80,61 @@ window.openRegisterModal = function () {
 window.toggleRegisterAdminPassword = function () {
     const role = document.getElementById("registerRole")?.value || "user";
     const row = document.getElementById("registerAdminPasswordRow");
+    const verifyRow = document.getElementById("registerAdminVerifyRow");
 
     if (row) {
         row.style.display = role === "admin" ? "block" : "none";
+    }
+
+    if (verifyRow) {
+        verifyRow.style.display = role === "admin" ? "block" : "none";
+    }
+
+    if (role === "admin") {
+        loadRegisterAdminVerifyCode();
+    } else {
+        registerAdminVerifyToken = "";
+        const verifyCode = document.getElementById("registerAdminVerifyCode");
+        if (verifyCode) {
+            verifyCode.value = "";
+        }
+    }
+};
+
+window.loadRegisterAdminVerifyCode = async function () {
+    const display = document.getElementById("registerAdminVerifyDisplay");
+    const input = document.getElementById("registerAdminVerifyCode");
+
+    if (display) {
+        display.innerText = "加载中...";
+    }
+
+    try {
+        const response = await fetch(`${USER_WIDGET_API}/admin/verify-code?purpose=admin_register`);
+        const data = await response.json();
+
+        if (!response.ok) {
+            registerAdminVerifyToken = "";
+            if (display) {
+                display.innerText = "加载失败";
+            }
+            setUserModalMessage("验证码加载失败：" + formatUserWidgetVerifyError(data));
+            return;
+        }
+
+        registerAdminVerifyToken = data.verify_token || "";
+        if (display) {
+            display.innerText = data.verify_code || "点击刷新";
+        }
+        if (input) {
+            input.value = "";
+        }
+    } catch (error) {
+        registerAdminVerifyToken = "";
+        if (display) {
+            display.innerText = "加载失败";
+        }
+        setUserModalMessage("验证码加载失败：" + error.message);
     }
 };
 
@@ -81,6 +145,7 @@ window.registerUser = async function () {
     const nickname = getUserInputValue("registerNickname");
     const role = getUserInputValue("registerRole") || "user";
     const adminPassword = getUserInputValue("registerAdminPassword");
+    const verifyCode = getUserInputValue("registerAdminVerifyCode").toUpperCase();
 
     if (!account || !password || !passwordConfirm) {
         setUserModalMessage("账号、密码、再次输入密码不能为空。");
@@ -97,6 +162,16 @@ window.registerUser = async function () {
         return;
     }
 
+    if (role === "admin" && !registerAdminVerifyToken) {
+        setUserModalMessage("请先获取动态验证码。");
+        return;
+    }
+
+    if (role === "admin" && !verifyCode) {
+        setUserModalMessage("请输入动态验证码。");
+        return;
+    }
+
     try {
         const response = await fetch(`${USER_WIDGET_API}/auth/register-v2`, {
             method: "POST",
@@ -108,7 +183,9 @@ window.registerUser = async function () {
                 nickname: nickname || account,
                 avatar_base64: editingAvatarBase64 || null,
                 role,
-                admin_password: adminPassword || null
+                admin_password: adminPassword || null,
+                verify_token: role === "admin" ? registerAdminVerifyToken : null,
+                verify_code: role === "admin" ? verifyCode : null
             })
         });
 
@@ -267,3 +344,35 @@ window.updateUserProfile = async function () {
         setUserModalMessage("保存失败，请确认后端已启动：" + error.message);
     }
 };
+
+function formatUserWidgetVerifyError(data) {
+    if (!data) {
+        return "未知错误";
+    }
+
+    if (typeof data.detail === "string") {
+        return data.detail;
+    }
+
+    return JSON.stringify(data);
+}
+
+const USER_WIDGET_V2_OVERRIDES = {
+    openRegisterModal: window.openRegisterModal,
+    toggleRegisterAdminPassword: window.toggleRegisterAdminPassword,
+    loadRegisterAdminVerifyCode: window.loadRegisterAdminVerifyCode,
+    registerUser: window.registerUser,
+    openEditProfileModal: window.openEditProfileModal,
+    updateUserProfile: window.updateUserProfile
+};
+
+window.installUserWidgetV2Overrides = function () {
+    Object.keys(USER_WIDGET_V2_OVERRIDES).forEach(name => {
+        if (USER_WIDGET_V2_OVERRIDES[name]) {
+            window[name] = USER_WIDGET_V2_OVERRIDES[name];
+        }
+    });
+};
+
+window.installUserWidgetV2Overrides();
+window.addEventListener("load", window.installUserWidgetV2Overrides);

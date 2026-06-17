@@ -198,7 +198,7 @@
 
         try {
             const token = localStorage.getItem(BACKUP_IMPORT_TOKEN_KEY) || "";
-            const response = await fetch(`${BACKUP_IMPORT_API}/backup/import-code?token=${encodeURIComponent(token)}`);
+            const response = await fetch(`${BACKUP_IMPORT_API}/admin/verify-code?purpose=backup_import&token=${encodeURIComponent(token)}`);
             const data = await response.json();
 
             if (!response.ok) {

@@ -85,6 +85,16 @@
             <input id="userRoleConfirmText" placeholder="请输入：修改角色">
         </div>
 
+        <div class="form-row">
+            <label>动态验证码</label>
+            <div class="xgw-verify-code-panel">
+                <span class="tag">验证码</span>
+                <strong id="userRoleVerifyDisplay" class="xgw-verify-code" onclick="loadUserRoleVerifyCode()" title="点击刷新验证码">点击获取</strong>
+                <button type="button" class="small-button filter-button" onclick="loadUserRoleVerifyCode()">刷新</button>
+            </div>
+            <input id="userRoleVerifyCode" placeholder="请输入上方动态验证码">
+        </div>
+
         <div id="userRoleModalMessage" class="message"></div>
 
         <div class="action-row">
