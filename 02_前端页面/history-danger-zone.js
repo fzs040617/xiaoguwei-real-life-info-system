@@ -1,7 +1,7 @@
 // history-danger-zone.js
 // 更新历史危险操作区 V6：
 // 普通用户不显示危险操作按钮。
-// 管理员显示按钮，但执行时必须输入系统密码 xgw2026。
+// 管理员显示按钮，但执行时必须输入系统密码。
 
 const HISTORY_DANGER_API = "http://127.0.0.1:8000";
 const HISTORY_USER_TOKEN_KEY = "xgw_user_token";
@@ -71,15 +71,15 @@ function injectHistoryDangerButton() {
             <h3 style="margin:0 0 12px; color:#b3261e;">按时间区间清空更新历史</h3>
             <div class="form-row">
                 <label>开始日期</label>
-                <input id="clearHistoryRangeStartDate" type="date" oninput="clearHistoryRangeMessage()">
+                <input id="clearHistoryRangeStartDate" type="date" min="2000-01-01" max="2099-12-31" maxlength="10" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" placeholder="YYYY-MM-DD" autocomplete="off" oninput="handleHistoryRangeDateInput(this)">
             </div>
             <div class="form-row">
                 <label>结束日期</label>
-                <input id="clearHistoryRangeEndDate" type="date" oninput="clearHistoryRangeMessage()">
+                <input id="clearHistoryRangeEndDate" type="date" min="2000-01-01" max="2099-12-31" maxlength="10" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" placeholder="YYYY-MM-DD" autocomplete="off" oninput="handleHistoryRangeDateInput(this)">
             </div>
             <div class="form-row">
                 <label>系统密码</label>
-                <input id="clearHistoryRangeSystemPassword" type="password" placeholder="请输入系统密码 xgw2026" oninput="clearHistoryRangeMessage()">
+                <input id="clearHistoryRangeSystemPassword" type="password" placeholder="请输入系统密码" oninput="clearHistoryRangeMessage()">
             </div>
             <div class="form-row">
                 <label>确认文字</label>
@@ -97,6 +97,133 @@ function injectHistoryDangerButton() {
     } else {
         container.appendChild(box);
     }
+
+    initHistoryDangerDateInputs();
+}
+
+function initHistoryDangerDateInputs() {
+    const inputs = [
+        document.getElementById("clearHistoryRangeStartDate"),
+        document.getElementById("clearHistoryRangeEndDate")
+    ].filter(Boolean);
+
+    inputs.forEach(input => {
+        input.addEventListener("click", () => openHistoryDatePicker(input));
+        input.addEventListener("focus", () => openHistoryDatePicker(input));
+        input.addEventListener("keydown", event => {
+            if (input.type !== "date" || typeof input.showPicker !== "function") {
+                return;
+            }
+
+            if (event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+
+            const allowedKeys = [
+                "Tab",
+                "Enter",
+                "Escape",
+                "Backspace",
+                "Delete",
+                "ArrowLeft",
+                "ArrowRight",
+                "ArrowUp",
+                "ArrowDown",
+                "Home",
+                "End"
+            ];
+
+            if (!allowedKeys.includes(event.key) && event.key.length === 1) {
+                event.preventDefault();
+                openHistoryDatePicker(input);
+            }
+        });
+        input.addEventListener("paste", event => {
+            if (input.type === "date" && typeof input.showPicker === "function") {
+                event.preventDefault();
+            }
+        });
+        input.addEventListener("drop", event => {
+            if (input.type === "date" && typeof input.showPicker === "function") {
+                event.preventDefault();
+            }
+        });
+    });
+}
+
+function openHistoryDatePicker(input) {
+    if (!input || typeof input.showPicker !== "function") {
+        return;
+    }
+
+    try {
+        input.showPicker();
+    } catch (error) {
+        // Some browsers only allow showPicker during a direct user gesture.
+    }
+}
+
+function handleHistoryRangeDateInput(input) {
+    clearHistoryRangeMessage();
+
+    if (!input) {
+        return;
+    }
+
+    if (input.type !== "date") {
+        input.value = normalizeHistoryRangeDateText(input.value);
+        return;
+    }
+
+    if (input.value && !isValidHistoryRangeDate(input.value)) {
+        input.value = "";
+    }
+}
+
+function normalizeHistoryRangeDateText(value) {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
+    const year = digits.slice(0, 4);
+    const month = digits.slice(4, 6);
+    const day = digits.slice(6, 8);
+
+    return [year, month, day].filter(Boolean).join("-");
+}
+
+function isValidHistoryRangeDate(value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        return false;
+    }
+
+    const [yearText, monthText, dayText] = value.split("-");
+    const year = Number(yearText);
+    const month = Number(monthText);
+    const day = Number(dayText);
+
+    if (year < 2000 || year > 2099) {
+        return false;
+    }
+
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    return date.getUTCFullYear() === year
+        && date.getUTCMonth() === month - 1
+        && date.getUTCDate() === day;
+}
+
+function validateHistoryRangeDates(startDate, endDate) {
+    if (!startDate || !isValidHistoryRangeDate(startDate)) {
+        return "请输入有效的开始日期";
+    }
+
+    if (!endDate || !isValidHistoryRangeDate(endDate)) {
+        return "请输入有效的结束日期";
+    }
+
+    if (endDate < startDate) {
+        return "结束日期不能早于开始日期";
+    }
+
+    return "";
 }
 
 function openClearHistoryModal() {
@@ -143,7 +270,7 @@ function openClearHistoryModal() {
 
             <div class="form-row">
                 <label>系统密码</label>
-                <input id="clearHistorySystemPassword" type="password" placeholder="请输入系统密码 xgw2026">
+                <input id="clearHistorySystemPassword" type="password" placeholder="请输入系统密码">
             </div>
 
             <div class="form-row">
@@ -298,13 +425,9 @@ async function clearRangeUpdateHistory() {
         return;
     }
 
-    if (!startDate || !endDate) {
-        setHistoryRangeMessage("请选择开始日期和结束日期。");
-        return;
-    }
-
-    if (startDate > endDate) {
-        setHistoryRangeMessage("开始日期不能晚于结束日期。");
+    const dateError = validateHistoryRangeDates(startDate, endDate);
+    if (dateError) {
+        setHistoryRangeMessage(dateError);
         return;
     }
 

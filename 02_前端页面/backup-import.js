@@ -3,7 +3,7 @@
 // 只在 backup.html 运行。
 // 普通用户不显示导入按钮，只显示权限说明。
 // 管理员显示备份导入区域。
-// 执行导入必须输入系统密码 xgw2026 + 随机验证码。
+// 执行导入必须输入系统密码 + 随机验证码。
 
 (function () {
     const BACKUP_IMPORT_API = "http://127.0.0.1:8000";
@@ -154,7 +154,7 @@
 
                 <div class="form-row">
                     <label>系统密码</label>
-                    <input id="backupImportSystemPassword" type="password" placeholder="请输入系统密码 xgw2026">
+                    <input id="backupImportSystemPassword" type="password" placeholder="请输入系统密码">
                 </div>
 
                 <div class="form-row">

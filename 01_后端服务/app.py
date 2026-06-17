@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
+import os
 import requests
 import re
 from urllib.parse import urlparse
@@ -33,6 +34,9 @@ from platform_collector import (
 from scheduler import start_scheduler
 
 Base.metadata.create_all(bind=engine)
+
+# Default is for local development only. Set XGW_SYSTEM_ADMIN_PASSWORD in deployment.
+SYSTEM_ADMIN_PASSWORD = os.getenv("XGW_SYSTEM_ADMIN_PASSWORD", "xgw2026")
 
 app = FastAPI(
     title="小谷围岛广州大学城真实生活信息共建系统",
@@ -1280,8 +1284,7 @@ def import_backup(
     db: Session = Depends(get_db)
 ):
     require_admin_token(db, backup_data.token)
-    if (backup_data.system_password or backup_data.password) != SYSTEM_ADMIN_PASSWORD:
-        raise HTTPException(status_code=403, detail="系统密码错误，禁止导入备份")
+    verify_system_password(backup_data.system_password or backup_data.password or "")
 
     imported_clues = 0
     skipped_clues = 0
@@ -2465,10 +2468,7 @@ def clear_all_update_history(
     db: Session = Depends(get_db)
 ):
     require_admin_token(db, request.token)
-    admin_password = "xgw2026"
-
-    if request.password != admin_password:
-        raise HTTPException(status_code=403, detail="密码错误，禁止清空更新历史")
+    verify_system_password(request.password)
 
     if request.confirm_text != "清空历史":
         raise HTTPException(status_code=400, detail="确认文字错误，请输入：清空历史")
@@ -2622,10 +2622,7 @@ def import_backup_data(
     db: Session = Depends(get_db)
 ):
     require_admin_token(db, request.token)
-    admin_password = "xgw2026"
-
-    if request.password != admin_password:
-        raise HTTPException(status_code=403, detail="密码错误，禁止导入备份")
+    verify_system_password(request.password)
 
     if request.confirm_text != "导入备份":
         raise HTTPException(status_code=400, detail="确认文字错误，请输入：导入备份")
@@ -2704,10 +2701,7 @@ def import_backup_data_v2(
     db: Session = Depends(get_db)
 ):
     require_admin_token(db, request.token)
-    admin_password = "xgw2026"
-
-    if request.password != admin_password:
-        raise HTTPException(status_code=403, detail="密码错误，禁止导入备份")
+    verify_system_password(request.password)
 
     server_code = BACKUP_IMPORT_VERIFY_CODES.get(request.verify_token)
 
@@ -2982,9 +2976,6 @@ def logout_user(
         "message": "已退出登录"
     }
 
-SYSTEM_ADMIN_PASSWORD = "xgw2026"
-
-
 class AuthRegisterV2Request(BaseModel):
     account: str
     password: str
@@ -3033,8 +3024,7 @@ def register_user_v2(
         raise HTTPException(status_code=400, detail="用户属性只能是普通用户或管理员")
 
     if role == "admin":
-        if request.admin_password != SYSTEM_ADMIN_PASSWORD:
-            raise HTTPException(status_code=403, detail="系统密码错误，不能注册管理员账号")
+        verify_system_password(request.admin_password or "")
 
     existing = db.query(AuthUser).filter(AuthUser.account == account).first()
 

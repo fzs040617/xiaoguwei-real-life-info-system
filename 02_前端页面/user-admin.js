@@ -243,7 +243,7 @@ function updateUserRoleModalPreview() {
         <div><strong>昵称：</strong>${escapeUserAdminHtml(userRoleEditingUser.nickname || "无昵称")}</div>
         <div><strong>当前角色：</strong>${renderUserRoleBadgeHtml(userRoleEditingUser.role)}</div>
         <div><strong>将修改为：</strong>${renderUserRoleBadgeHtml(newRole)}</div>
-        <div class="notice">系统密码请输入：xgw2026；确认文字必须输入：修改角色。</div>
+        <div class="notice">系统密码请从部署配置或管理员处获取；确认文字必须输入：修改角色。</div>
         <div class="notice">该操作只修改角色，不删除用户、不重置密码、不封禁账号。</div>
     `;
 }
@@ -270,7 +270,7 @@ async function submitUserRoleChange() {
     const confirmText = document.getElementById("userRoleConfirmText")?.value || "";
 
     if (!systemPassword) {
-        setUserRoleModalMessage("请输入系统密码。系统密码为：xgw2026", true);
+        setUserRoleModalMessage("请输入系统密码。系统密码请从部署配置或管理员处获取。", true);
         return;
     }
 
