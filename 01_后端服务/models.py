@@ -115,6 +115,28 @@ class UpdateHistory(Base):
     operator = Column(String(100), default="系统")
     created_at = Column(DateTime, default=datetime.now)
 
+class SecurityAuditLog(Base):
+    """
+    独立安全审计表：记录危险操作成功和失败，不随普通更新历史清空。
+    """
+    __tablename__ = "security_audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_type = Column(String(100), nullable=False)
+    result = Column(String(30), nullable=False)
+    reason = Column(String(100), nullable=False)
+    actor_user_id = Column(Integer, nullable=True)
+    actor_account = Column(String(100), nullable=True)
+    actor_nickname = Column(String(100), nullable=True)
+    actor_role = Column(String(50), nullable=True)
+    target_type = Column(String(100), nullable=True)
+    target_id = Column(String(100), nullable=True)
+    target_title = Column(String(300), nullable=True)
+    detail = Column(Text, nullable=True)
+    request_path = Column(String(300), nullable=True)
+    is_dangerous = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+
 class AuthUser(Base):
     """
     用户表：

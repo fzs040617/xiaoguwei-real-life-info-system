@@ -78,11 +78,19 @@ function injectHistoryDangerButton() {
             <h3 style="margin:0 0 12px; color:#b3261e;">按时间区间清空更新历史</h3>
             <div class="form-row">
                 <label>开始日期</label>
-                <input id="clearHistoryRangeStartDate" type="date" min="2000-01-01" max="2099-12-31" maxlength="10" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" placeholder="YYYY-MM-DD" autocomplete="off" oninput="handleHistoryRangeDateInput(this)">
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input id="clearHistoryRangeStartDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9./-]{8,10}" placeholder="例如：20990102 或 2099-01-02" autocomplete="off" oninput="handleHistoryRangeDateInput(this)">
+                    <button type="button" class="small-button filter-button" onclick="openHistoryDatePicker('clearHistoryRangeStartDatePicker')">选择日期</button>
+                    <input id="clearHistoryRangeStartDatePicker" type="date" min="2000-01-01" max="2099-12-31" tabindex="-1" onchange="handleHistoryRangePickerChange('clearHistoryRangeStartDate', this)" style="position:absolute; opacity:0; width:1px; height:1px; pointer-events:none;">
+                </div>
             </div>
             <div class="form-row">
                 <label>结束日期</label>
-                <input id="clearHistoryRangeEndDate" type="date" min="2000-01-01" max="2099-12-31" maxlength="10" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}" placeholder="YYYY-MM-DD" autocomplete="off" oninput="handleHistoryRangeDateInput(this)">
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input id="clearHistoryRangeEndDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9./-]{8,10}" placeholder="例如：20990103 或 2099-01-03" autocomplete="off" oninput="handleHistoryRangeDateInput(this)">
+                    <button type="button" class="small-button filter-button" onclick="openHistoryDatePicker('clearHistoryRangeEndDatePicker')">选择日期</button>
+                    <input id="clearHistoryRangeEndDatePicker" type="date" min="2000-01-01" max="2099-12-31" tabindex="-1" onchange="handleHistoryRangePickerChange('clearHistoryRangeEndDate', this)" style="position:absolute; opacity:0; width:1px; height:1px; pointer-events:none;">
+                </div>
             </div>
             <div class="form-row">
                 <label>系统密码</label>
@@ -125,59 +133,45 @@ function initHistoryDangerDateInputs() {
     ].filter(Boolean);
 
     inputs.forEach(input => {
-        input.addEventListener("click", () => openHistoryDatePicker(input));
-        input.addEventListener("focus", () => openHistoryDatePicker(input));
         input.addEventListener("keydown", event => {
-            if (input.type !== "date" || typeof input.showPicker !== "function") {
-                return;
-            }
-
-            if (event.ctrlKey || event.metaKey || event.altKey) {
-                return;
-            }
-
-            const allowedKeys = [
-                "Tab",
-                "Enter",
-                "Escape",
-                "Backspace",
-                "Delete",
-                "ArrowLeft",
-                "ArrowRight",
-                "ArrowUp",
-                "ArrowDown",
-                "Home",
-                "End"
-            ];
-
-            if (!allowedKeys.includes(event.key) && event.key.length === 1) {
-                event.preventDefault();
-                openHistoryDatePicker(input);
+            if (event.key === "Enter") {
+                applyFlexibleHistoryRangeDate(input, input.value);
             }
         });
-        input.addEventListener("paste", event => {
-            if (input.type === "date" && typeof input.showPicker === "function") {
-                event.preventDefault();
-            }
-        });
-        input.addEventListener("drop", event => {
-            if (input.type === "date" && typeof input.showPicker === "function") {
-                event.preventDefault();
-            }
+        input.addEventListener("blur", () => {
+            applyFlexibleHistoryRangeDate(input, input.value);
         });
     });
 }
 
-function openHistoryDatePicker(input) {
-    if (!input || typeof input.showPicker !== "function") {
+function openHistoryDatePicker(inputOrId) {
+    const input = typeof inputOrId === "string" ? document.getElementById(inputOrId) : inputOrId;
+
+    if (!input) {
         return;
     }
 
     try {
-        input.showPicker();
+        if (typeof input.showPicker === "function") {
+            input.showPicker();
+            return;
+        }
     } catch (error) {
         // Some browsers only allow showPicker during a direct user gesture.
     }
+
+    input.focus();
+    input.click();
+}
+
+function handleHistoryRangePickerChange(textInputId, pickerInput) {
+    const textInput = document.getElementById(textInputId);
+
+    if (!textInput || !pickerInput || !pickerInput.value) {
+        return;
+    }
+
+    applyFlexibleHistoryRangeDate(textInput, pickerInput.value);
 }
 
 async function loadHistoryDangerVerifyCode(purpose) {
@@ -250,7 +244,7 @@ function handleHistoryRangeDateInput(input) {
     }
 
     if (input.type !== "date") {
-        input.value = normalizeHistoryRangeDateText(input.value);
+        applyFlexibleHistoryRangeDate(input, input.value, {partial: true});
         return;
     }
 
@@ -263,9 +257,50 @@ function handleHistoryRangeDateInput(input) {
     }
 }
 
+function applyFlexibleHistoryRangeDate(input, rawValue, options = {}) {
+    if (!input) {
+        return "";
+    }
+
+    const normalized = normalizeFlexibleHistoryRangeDateValue(rawValue);
+    const compactDigits = String(rawValue || "").replace(/\D/g, "");
+    const isPartial = options.partial === true && compactDigits.length > 0 && compactDigits.length < 8;
+
+    if (isPartial) {
+        return "";
+    }
+
+    if (!normalized) {
+        input.value = "";
+        syncHistoryRangePickerValue(input);
+        return "";
+    }
+
+    if (!isValidHistoryRangeDate(normalized)) {
+        input.value = "";
+        input.dataset.flexDateBuffer = "";
+        syncHistoryRangePickerValue(input);
+        clearInvalidHistoryRangeEndDate(input);
+        return "";
+    }
+
+    input.value = normalized;
+    input.dataset.flexDateBuffer = "";
+    syncHistoryRangePickerValue(input);
+
+    if (input.id === "clearHistoryRangeStartDate") {
+        syncHistoryRangeEndDate();
+    } else {
+        clearInvalidHistoryRangeEndDate(input);
+    }
+
+    return normalized;
+}
+
 function syncHistoryRangeEndDate() {
     const startInput = document.getElementById("clearHistoryRangeStartDate");
     const endInput = document.getElementById("clearHistoryRangeEndDate");
+    const endPicker = document.getElementById("clearHistoryRangeEndDatePicker");
 
     if (!startInput || !endInput) {
         return;
@@ -273,23 +308,81 @@ function syncHistoryRangeEndDate() {
 
     if (!isValidHistoryRangeDate(startInput.value)) {
         endInput.min = "2000-01-01";
+        if (endPicker) {
+            endPicker.min = "2000-01-01";
+        }
         return;
     }
 
     endInput.min = startInput.value;
+    if (endPicker) {
+        endPicker.min = startInput.value;
+    }
 
     if (!endInput.value || endInput.value < startInput.value) {
         endInput.value = startInput.value;
+        syncHistoryRangePickerValue(endInput);
     }
 }
 
-function normalizeHistoryRangeDateText(value) {
-    const digits = String(value || "").replace(/\D/g, "").slice(0, 8);
-    const year = digits.slice(0, 4);
-    const month = digits.slice(4, 6);
-    const day = digits.slice(6, 8);
+function clearInvalidHistoryRangeEndDate(input) {
+    if (!input || input.id !== "clearHistoryRangeEndDate") {
+        return;
+    }
 
-    return [year, month, day].filter(Boolean).join("-");
+    const startInput = document.getElementById("clearHistoryRangeStartDate");
+
+    if (!startInput || !isValidHistoryRangeDate(startInput.value)) {
+        return;
+    }
+
+    if (input.value && input.value < startInput.value) {
+        input.value = startInput.value;
+        syncHistoryRangePickerValue(input);
+    }
+}
+
+function syncHistoryRangePickerValue(textInput) {
+    const pickerIdMap = {
+        clearHistoryRangeStartDate: "clearHistoryRangeStartDatePicker",
+        clearHistoryRangeEndDate: "clearHistoryRangeEndDatePicker"
+    };
+    const picker = document.getElementById(pickerIdMap[textInput.id]);
+
+    if (!picker) {
+        return;
+    }
+
+    if (isValidHistoryRangeDate(textInput.value)) {
+        picker.value = textInput.value;
+    } else {
+        picker.value = "";
+    }
+}
+
+function normalizeFlexibleHistoryRangeDateValue(value) {
+    const text = String(value || "").trim();
+
+    if (!text) {
+        return "";
+    }
+
+    const compactMatch = text.match(/^(\d{4})(\d{2})(\d{2})$/);
+    if (compactMatch) {
+        return `${compactMatch[1]}-${compactMatch[2]}-${compactMatch[3]}`;
+    }
+
+    const dashedMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (dashedMatch) {
+        return `${dashedMatch[1]}-${dashedMatch[2].padStart(2, "0")}-${dashedMatch[3].padStart(2, "0")}`;
+    }
+
+    const slashOrDotMatch = text.match(/^(\d{4})[/.](\d{1,2})[/.](\d{1,2})$/);
+    if (slashOrDotMatch) {
+        return `${slashOrDotMatch[1]}-${slashOrDotMatch[2].padStart(2, "0")}-${slashOrDotMatch[3].padStart(2, "0")}`;
+    }
+
+    return text;
 }
 
 function isValidHistoryRangeDate(value) {
@@ -542,8 +635,10 @@ function getHistoryDangerErrorMessage(data) {
 }
 async function clearRangeUpdateHistory() {
     const token = localStorage.getItem(HISTORY_USER_TOKEN_KEY);
-    const startDate = document.getElementById("clearHistoryRangeStartDate").value.trim();
-    const endDate = document.getElementById("clearHistoryRangeEndDate").value.trim();
+    const startDateInput = document.getElementById("clearHistoryRangeStartDate");
+    const endDateInput = document.getElementById("clearHistoryRangeEndDate");
+    const startDate = applyFlexibleHistoryRangeDate(startDateInput, startDateInput.value || startDateInput.dataset.flexDateBuffer);
+    const endDate = applyFlexibleHistoryRangeDate(endDateInput, endDateInput.value || endDateInput.dataset.flexDateBuffer);
     const systemPassword = document.getElementById("clearHistoryRangeSystemPassword").value.trim();
     const confirmText = normalizeHistoryConfirmText(document.getElementById("clearHistoryRangeConfirmText").value);
     const verifyCode = document.getElementById("clearHistoryRangeVerifyCode").value.trim().toUpperCase();

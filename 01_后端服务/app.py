@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 from bs4 import BeautifulSoup
 
 from database import Base, engine, SessionLocal
-from models import Clue, VerifiedItem, CrawlTarget, Feedback, MapPoint, RoutePlan, UpdateHistory, AuthUser
+from models import Clue, VerifiedItem, CrawlTarget, Feedback, MapPoint, RoutePlan, UpdateHistory, AuthUser, SecurityAuditLog
 from platform_collector import (
     COLLECTOR_DB_PATH,
     create_manual_item as collector_create_manual_item,
@@ -113,6 +113,72 @@ def record_update_history(
     except Exception:
         db.rollback()
         return None
+
+
+def record_security_audit(
+    db: Session,
+    event_type: str,
+    result: str,
+    reason: str,
+    actor_user=None,
+    actor_account: Optional[str] = None,
+    actor_nickname: Optional[str] = None,
+    actor_role: Optional[str] = None,
+    target_type: Optional[str] = None,
+    target_id: Optional[str] = None,
+    target_title: Optional[str] = None,
+    detail: Optional[str] = None,
+    request_path: Optional[str] = None,
+    is_dangerous: bool = True,
+):
+    try:
+        if actor_user is not None:
+            actor_account = actor_account or getattr(actor_user, "account", None)
+            actor_nickname = actor_nickname or getattr(actor_user, "nickname", None)
+            actor_role = actor_role or getattr(actor_user, "role", None)
+            actor_user_id = getattr(actor_user, "id", None)
+        else:
+            actor_user_id = None
+
+        log = SecurityAuditLog(
+            event_type=(event_type or "").strip() or "unknown",
+            result=(result or "").strip() or "failure",
+            reason=(reason or "").strip() or "unexpected_error",
+            actor_user_id=actor_user_id,
+            actor_account=actor_account,
+            actor_nickname=actor_nickname,
+            actor_role=actor_role,
+            target_type=target_type,
+            target_id=str(target_id) if target_id is not None else None,
+            target_title=target_title,
+            detail=detail,
+            request_path=request_path,
+            is_dangerous=is_dangerous,
+        )
+        db.add(log)
+        db.commit()
+        db.refresh(log)
+        return log
+    except Exception:
+        db.rollback()
+        return None
+
+
+def get_security_audit_actor_by_token(db: Session, token: str):
+    try:
+        token_text = (token or "").strip()
+        if not token_text:
+            return None
+        return db.query(AuthUser).filter(AuthUser.session_token == token_text).first()
+    except Exception:
+        return None
+
+
+def get_verify_code_audit_reason(error: HTTPException):
+    detail = str(getattr(error, "detail", "") or "")
+    if "验证码" in detail:
+        return "verify_code_error"
+    return "unexpected_error"
 
 
 class ClueCreate(BaseModel):
@@ -3110,22 +3176,100 @@ def register_user_v2(
     nickname = (request.nickname or account).strip()
     role = (request.role or "user").strip()
 
-    validate_account_or_password(account, "账号")
-    validate_account_or_password(password, "密码")
+    try:
+        validate_account_or_password(account, "账号")
+        validate_account_or_password(password, "密码")
+    except HTTPException:
+        if role == "admin":
+            record_security_audit(
+                db,
+                event_type="admin_register",
+                result="failure",
+                reason="unexpected_error",
+                actor_account=account,
+                actor_nickname=nickname or account,
+                actor_role="admin",
+                target_type="auth_user",
+                target_title=account,
+                detail="admin register account or password validation failed",
+                request_path="/auth/register-v2",
+            )
+        raise
 
     if password != password_confirm:
+        if role == "admin":
+            record_security_audit(
+                db,
+                event_type="admin_register",
+                result="failure",
+                reason="unexpected_error",
+                actor_account=account,
+                actor_nickname=nickname or account,
+                actor_role="admin",
+                target_type="auth_user",
+                target_title=account,
+                detail="password_confirm_mismatch",
+                request_path="/auth/register-v2",
+            )
         raise HTTPException(status_code=400, detail="两次输入的密码不一致")
 
     if role not in ["user", "admin"]:
         raise HTTPException(status_code=400, detail="用户属性只能是普通用户或管理员")
 
     if role == "admin":
-        verify_system_password(request.admin_password or "")
-        verify_admin_code(request.verify_token or "", request.verify_code or "", "admin_register")
+        try:
+            verify_system_password(request.admin_password or "")
+        except HTTPException:
+            record_security_audit(
+                db,
+                event_type="admin_register",
+                result="failure",
+                reason="system_password_error",
+                actor_account=account,
+                actor_nickname=nickname or account,
+                actor_role="admin",
+                target_type="auth_user",
+                target_title=account,
+                detail="admin register system password check failed",
+                request_path="/auth/register-v2",
+            )
+            raise
+
+        try:
+            verify_admin_code(request.verify_token or "", request.verify_code or "", "admin_register")
+        except HTTPException as exc:
+            record_security_audit(
+                db,
+                event_type="admin_register",
+                result="failure",
+                reason=get_verify_code_audit_reason(exc),
+                actor_account=account,
+                actor_nickname=nickname or account,
+                actor_role="admin",
+                target_type="auth_user",
+                target_title=account,
+                detail="admin register verify code check failed",
+                request_path="/auth/register-v2",
+            )
+            raise
 
     existing = db.query(AuthUser).filter(AuthUser.account == account).first()
 
     if existing:
+        if role == "admin":
+            record_security_audit(
+                db,
+                event_type="admin_register",
+                result="failure",
+                reason="unexpected_error",
+                actor_account=account,
+                actor_nickname=nickname or account,
+                actor_role="admin",
+                target_type="auth_user",
+                target_title=account,
+                detail="account already exists",
+                request_path="/auth/register-v2",
+            )
         raise HTTPException(status_code=400, detail="账号已存在，请换一个账号")
 
     salt = secrets.token_hex(16)
@@ -3144,9 +3288,41 @@ def register_user_v2(
         last_login_at=datetime.now()
     )
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+    try:
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()
+        if role == "admin":
+            record_security_audit(
+                db,
+                event_type="admin_register",
+                result="failure",
+                reason="unexpected_error",
+                actor_account=account,
+                actor_nickname=nickname or account,
+                actor_role="admin",
+                target_type="auth_user",
+                target_title=account,
+                detail="admin register database write failed",
+                request_path="/auth/register-v2",
+            )
+        raise
+
+    if role == "admin":
+        record_security_audit(
+            db,
+            event_type="admin_register",
+            result="success",
+            reason="success",
+            actor_user=user,
+            target_type="auth_user",
+            target_id=user.id,
+            target_title=user.account,
+            detail="admin user registered",
+            request_path="/auth/register-v2",
+        )
 
     return {
         "message": "注册成功",
@@ -3367,32 +3543,165 @@ def update_auth_user_role_admin(
     request: AuthUserRoleAdminRequest,
     db: Session = Depends(get_db)
 ):
-    admin_user = require_admin_user(db, request.token)
-    verify_system_password(request.system_password)
-    verify_admin_code(request.verify_token, request.verify_code, "user_role_change")
+    target_user = None
+
+    try:
+        admin_user = require_admin_user(db, request.token)
+    except HTTPException:
+        record_security_audit(
+            db,
+            event_type="user_role_change",
+            result="failure",
+            reason="permission_denied",
+            actor_user=get_security_audit_actor_by_token(db, request.token),
+            target_type="auth_user",
+            target_id=user_id,
+            detail="role change permission denied",
+            request_path=f"/auth/users/{user_id}/role-admin",
+        )
+        raise
+
+    try:
+        verify_system_password(request.system_password)
+    except HTTPException:
+        record_security_audit(
+            db,
+            event_type="user_role_change",
+            result="failure",
+            reason="system_password_error",
+            actor_user=admin_user,
+            target_type="auth_user",
+            target_id=user_id,
+            detail="role change system password check failed",
+            request_path=f"/auth/users/{user_id}/role-admin",
+        )
+        raise
+
+    try:
+        verify_admin_code(request.verify_token, request.verify_code, "user_role_change")
+    except HTTPException as exc:
+        record_security_audit(
+            db,
+            event_type="user_role_change",
+            result="failure",
+            reason=get_verify_code_audit_reason(exc),
+            actor_user=admin_user,
+            target_type="auth_user",
+            target_id=user_id,
+            detail="role change verify code check failed",
+            request_path=f"/auth/users/{user_id}/role-admin",
+        )
+        raise
 
     if request.confirm_text != "修改角色":
+        record_security_audit(
+            db,
+            event_type="user_role_change",
+            result="failure",
+            reason="confirm_text_error",
+            actor_user=admin_user,
+            target_type="auth_user",
+            target_id=user_id,
+            detail="role change confirm text mismatch",
+            request_path=f"/auth/users/{user_id}/role-admin",
+        )
         raise HTTPException(status_code=400, detail="确认文字错误，请输入：修改角色")
 
     new_role = (request.new_role or "").strip()
     if new_role not in ["admin", "user"]:
+        record_security_audit(
+            db,
+            event_type="user_role_change",
+            result="failure",
+            reason="unexpected_error",
+            actor_user=admin_user,
+            target_type="auth_user",
+            target_id=user_id,
+            detail="invalid requested role",
+            request_path=f"/auth/users/{user_id}/role-admin",
+        )
         raise HTTPException(status_code=400, detail="新角色只能是 admin 或 user")
 
     target_user = db.query(AuthUser).filter(AuthUser.id == user_id).first()
     if target_user is None:
+        record_security_audit(
+            db,
+            event_type="user_role_change",
+            result="failure",
+            reason="unexpected_error",
+            actor_user=admin_user,
+            target_type="auth_user",
+            target_id=user_id,
+            detail="target user not found",
+            request_path=f"/auth/users/{user_id}/role-admin",
+        )
         raise HTTPException(status_code=404, detail="用户不存在")
 
     if target_user.id == admin_user.id:
+        record_security_audit(
+            db,
+            event_type="user_role_change",
+            result="failure",
+            reason="self_role_change_denied",
+            actor_user=admin_user,
+            target_type="auth_user",
+            target_id=target_user.id,
+            target_title=target_user.account,
+            detail=f"role from {target_user.role} to {new_role}",
+            request_path=f"/auth/users/{user_id}/role-admin",
+        )
         raise HTTPException(status_code=400, detail="不能修改当前登录管理员自己的角色")
 
     if target_user.role == "admin" and new_role != "admin":
         admin_count = db.query(AuthUser).filter(AuthUser.role == "admin").count()
         if admin_count <= 1:
+            record_security_audit(
+                db,
+                event_type="user_role_change",
+                result="failure",
+                reason="last_admin_downgrade_denied",
+                actor_user=admin_user,
+                target_type="auth_user",
+                target_id=target_user.id,
+                target_title=target_user.account,
+                detail=f"role from {target_user.role} to {new_role}",
+                request_path=f"/auth/users/{user_id}/role-admin",
+            )
             raise HTTPException(status_code=400, detail="不能降级最后一个管理员")
 
+    old_role = target_user.role
     target_user.role = new_role
-    db.commit()
-    db.refresh(target_user)
+    try:
+        db.commit()
+        db.refresh(target_user)
+    except Exception:
+        db.rollback()
+        record_security_audit(
+            db,
+            event_type="user_role_change",
+            result="failure",
+            reason="unexpected_error",
+            actor_user=admin_user,
+            target_type="auth_user",
+            target_id=user_id,
+            target_title=target_user.account,
+            detail=f"role from {old_role} to {new_role}; database write failed",
+            request_path=f"/auth/users/{user_id}/role-admin",
+        )
+        raise
+
+    record_security_audit(
+        db,
+        event_type="user_role_change",
+        result="success",
+        reason="success",
+        actor_user=admin_user,
+        target_type="auth_user",
+        target_id=target_user.id,
+        target_title=target_user.account,
+        detail=f"role from {old_role} to {new_role}",
+        request_path=f"/auth/users/{user_id}/role-admin",
+    )
 
     return {
         "message": "用户角色已更新",
@@ -3405,17 +3714,93 @@ def clear_all_update_history_admin_v2(
     request: ClearUpdateHistoryAdminV2Request,
     db: Session = Depends(get_db)
 ):
-    user = require_admin_user(db, request.token)
-    verify_system_password(request.system_password)
-    verify_admin_code(request.verify_token, request.verify_code, "history_clear_all")
+    try:
+        user = require_admin_user(db, request.token)
+    except HTTPException:
+        record_security_audit(
+            db,
+            event_type="history_clear_all",
+            result="failure",
+            reason="permission_denied",
+            actor_user=get_security_audit_actor_by_token(db, request.token),
+            target_type="update_history",
+            detail="clear all history permission denied",
+            request_path="/update-history/clear-all-admin-v2",
+        )
+        raise
+
+    try:
+        verify_system_password(request.system_password)
+    except HTTPException:
+        record_security_audit(
+            db,
+            event_type="history_clear_all",
+            result="failure",
+            reason="system_password_error",
+            actor_user=user,
+            target_type="update_history",
+            detail="clear all history system password check failed",
+            request_path="/update-history/clear-all-admin-v2",
+        )
+        raise
+
+    try:
+        verify_admin_code(request.verify_token, request.verify_code, "history_clear_all")
+    except HTTPException as exc:
+        record_security_audit(
+            db,
+            event_type="history_clear_all",
+            result="failure",
+            reason=get_verify_code_audit_reason(exc),
+            actor_user=user,
+            target_type="update_history",
+            detail="clear all history verify code check failed",
+            request_path="/update-history/clear-all-admin-v2",
+        )
+        raise
 
     if request.confirm_text != "清空历史":
+        record_security_audit(
+            db,
+            event_type="history_clear_all",
+            result="failure",
+            reason="confirm_text_error",
+            actor_user=user,
+            target_type="update_history",
+            detail="clear all history confirm text mismatch",
+            request_path="/update-history/clear-all-admin-v2",
+        )
         raise HTTPException(status_code=400, detail="确认文字错误，请输入：清空历史")
 
     count = db.query(UpdateHistory).count()
 
-    db.query(UpdateHistory).delete()
-    db.commit()
+    try:
+        db.query(UpdateHistory).delete()
+        db.commit()
+    except Exception:
+        db.rollback()
+        record_security_audit(
+            db,
+            event_type="history_clear_all",
+            result="failure",
+            reason="unexpected_error",
+            actor_user=user,
+            target_type="update_history",
+            detail="clear all history database delete failed",
+            request_path="/update-history/clear-all-admin-v2",
+        )
+        raise
+
+    record_security_audit(
+        db,
+        event_type="history_clear_all",
+        result="success",
+        reason="success",
+        actor_user=user,
+        target_type="update_history",
+        detail=f"deleted_count={count}",
+        request_path="/update-history/clear-all-admin-v2",
+    )
 
     return {
         "message": "所有更新历史已清空",
@@ -3429,33 +3814,124 @@ def clear_range_update_history_admin(
     request: ClearUpdateHistoryRangeAdminRequest,
     db: Session = Depends(get_db)
 ):
-    user = require_admin_user(db, request.token)
-    verify_system_password(request.system_password)
-    verify_admin_code(request.verify_token, request.verify_code, "history_clear_range")
+    try:
+        user = require_admin_user(db, request.token)
+    except HTTPException:
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason="permission_denied",
+            actor_user=get_security_audit_actor_by_token(db, request.token),
+            target_type="update_history",
+            detail="clear range history permission denied",
+            request_path="/update-history/clear-range-admin",
+        )
+        raise
+
+    try:
+        verify_system_password(request.system_password)
+    except HTTPException:
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason="system_password_error",
+            actor_user=user,
+            target_type="update_history",
+            detail="clear range history system password check failed",
+            request_path="/update-history/clear-range-admin",
+        )
+        raise
+
+    try:
+        verify_admin_code(request.verify_token, request.verify_code, "history_clear_range")
+    except HTTPException as exc:
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason=get_verify_code_audit_reason(exc),
+            actor_user=user,
+            target_type="update_history",
+            detail="clear range history verify code check failed",
+            request_path="/update-history/clear-range-admin",
+        )
+        raise
 
     if request.confirm_text != "清空历史":
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason="confirm_text_error",
+            actor_user=user,
+            target_type="update_history",
+            detail="clear range history confirm text mismatch",
+            request_path="/update-history/clear-range-admin",
+        )
         raise HTTPException(status_code=400, detail="确认文字错误，请输入：清空历史")
 
     start_text = (request.start_date or "").strip()
     end_text = (request.end_date or "").strip()
 
     if not start_text or not end_text:
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason="invalid_date",
+            actor_user=user,
+            target_type="update_history",
+            detail="missing start_date or end_date",
+            request_path="/update-history/clear-range-admin",
+        )
         raise HTTPException(status_code=400, detail="请选择开始日期和结束日期")
 
     date_pattern = r"^\d{4}-\d{2}-\d{2}$"
     if not re.match(date_pattern, start_text) or not re.match(date_pattern, end_text):
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason="invalid_date",
+            actor_user=user,
+            target_type="update_history",
+            detail=f"invalid date format; start_date={start_text}; end_date={end_text}",
+            request_path="/update-history/clear-range-admin",
+        )
         raise HTTPException(status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD")
 
     try:
         start_day = datetime.strptime(start_text, "%Y-%m-%d")
         end_day = datetime.strptime(end_text, "%Y-%m-%d")
     except ValueError:
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason="invalid_date",
+            actor_user=user,
+            target_type="update_history",
+            detail=f"invalid date value; start_date={start_text}; end_date={end_text}",
+            request_path="/update-history/clear-range-admin",
+        )
         raise HTTPException(status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD")
 
     start_at = datetime.combine(start_day.date(), datetime.min.time())
     end_at = datetime.combine(end_day.date(), datetime.max.time())
 
     if start_at > end_at:
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason="invalid_date",
+            actor_user=user,
+            target_type="update_history",
+            detail=f"start date after end date; start_date={start_text}; end_date={end_text}",
+            request_path="/update-history/clear-range-admin",
+        )
         raise HTTPException(status_code=400, detail="开始日期不能晚于结束日期")
 
     query = db.query(UpdateHistory).filter(
@@ -3464,8 +3940,33 @@ def clear_range_update_history_admin(
     )
     count = query.count()
 
-    query.delete(synchronize_session=False)
-    db.commit()
+    try:
+        query.delete(synchronize_session=False)
+        db.commit()
+    except Exception:
+        db.rollback()
+        record_security_audit(
+            db,
+            event_type="history_clear_range",
+            result="failure",
+            reason="unexpected_error",
+            actor_user=user,
+            target_type="update_history",
+            detail=f"clear range history database delete failed; start_date={start_text}; end_date={end_text}",
+            request_path="/update-history/clear-range-admin",
+        )
+        raise
+
+    record_security_audit(
+        db,
+        event_type="history_clear_range",
+        result="success",
+        reason="success",
+        actor_user=user,
+        target_type="update_history",
+        detail=f"start_date={start_text}; end_date={end_text}; deleted_count={count}",
+        request_path="/update-history/clear-range-admin",
+    )
 
     return {
         "message": "指定时间区间内的更新历史已清空",
@@ -3488,17 +3989,79 @@ def import_backup_data_v3(
     request: BackupImportSecureV3Request,
     db: Session = Depends(get_db)
 ):
-    user = require_admin_user(db, request.token)
-    verify_system_password(request.system_password)
-    verify_admin_code(request.verify_token, request.verify_code, "backup_import")
+    try:
+        user = require_admin_user(db, request.token)
+    except HTTPException:
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason="permission_denied",
+            actor_user=get_security_audit_actor_by_token(db, request.token),
+            target_type="backup",
+            detail="backup import permission denied",
+            request_path="/backup/import-v3",
+        )
+        raise
+
+    try:
+        verify_system_password(request.system_password)
+    except HTTPException:
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason="system_password_error",
+            actor_user=user,
+            target_type="backup",
+            detail="backup import system password check failed",
+            request_path="/backup/import-v3",
+        )
+        raise
+
+    try:
+        verify_admin_code(request.verify_token, request.verify_code, "backup_import")
+    except HTTPException as exc:
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason=get_verify_code_audit_reason(exc),
+            actor_user=user,
+            target_type="backup",
+            detail="backup import verify code check failed",
+            request_path="/backup/import-v3",
+        )
+        raise
+
     BACKUP_IMPORT_VERIFY_CODES[request.verify_token] = request.verify_code.strip().upper()
 
     server_code = BACKUP_IMPORT_VERIFY_CODES.get(request.verify_token)
 
     if not server_code:
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason="verify_code_error",
+            actor_user=user,
+            target_type="backup",
+            detail="backup import verify code missing after validation",
+            request_path="/backup/import-v3",
+        )
         raise HTTPException(status_code=400, detail="验证码已失效，请刷新验证码后重试")
 
     if request.verify_code.strip().upper() != server_code:
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason="verify_code_error",
+            actor_user=user,
+            target_type="backup",
+            detail="backup import verify code mismatch after validation",
+            request_path="/backup/import-v3",
+        )
         raise HTTPException(status_code=400, detail="验证码错误，禁止导入备份")
 
     BACKUP_IMPORT_VERIFY_CODES.pop(request.verify_token, None)
@@ -3506,28 +4069,86 @@ def import_backup_data_v3(
     backup_data = request.backup_data
 
     if not isinstance(backup_data, dict):
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason="invalid_file",
+            actor_user=user,
+            target_type="backup",
+            detail="backup payload is not an object",
+            request_path="/backup/import-v3",
+        )
         raise HTTPException(status_code=400, detail="备份数据格式错误")
 
     data = backup_data.get("data")
 
     if not isinstance(data, dict):
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason="invalid_file",
+            actor_user=user,
+            target_type="backup",
+            detail="backup payload missing data object",
+            request_path="/backup/import-v3",
+        )
         raise HTTPException(status_code=400, detail="备份文件缺少 data 字段")
 
     result = {}
 
-    result["clues"] = import_backup_items(db, Clue, data.get("clues", []))
-    result["verified_items"] = import_backup_items(db, VerifiedItem, data.get("verified_items", []))
-    result["crawl_targets"] = import_backup_items(db, CrawlTarget, data.get("crawl_targets", []))
-    result["feedbacks"] = import_backup_items(db, Feedback, data.get("feedbacks", []))
-    result["map_points"] = import_backup_items(db, MapPoint, data.get("map_points", []))
-    result["routes"] = import_backup_items(db, RoutePlan, data.get("routes", []))
-    result["update_histories"] = import_backup_items(db, UpdateHistory, data.get("update_histories", []))
+    try:
+        result["clues"] = import_backup_items(db, Clue, data.get("clues", []))
+        result["verified_items"] = import_backup_items(db, VerifiedItem, data.get("verified_items", []))
+        result["crawl_targets"] = import_backup_items(db, CrawlTarget, data.get("crawl_targets", []))
+        result["feedbacks"] = import_backup_items(db, Feedback, data.get("feedbacks", []))
+        result["map_points"] = import_backup_items(db, MapPoint, data.get("map_points", []))
+        result["routes"] = import_backup_items(db, RoutePlan, data.get("routes", []))
+        result["update_histories"] = import_backup_items(db, UpdateHistory, data.get("update_histories", []))
 
-    db.commit()
+        db.commit()
+    except HTTPException:
+        db.rollback()
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason="import_error",
+            actor_user=user,
+            target_type="backup",
+            detail="backup import failed with HTTPException",
+            request_path="/backup/import-v3",
+        )
+        raise
+    except Exception:
+        db.rollback()
+        record_security_audit(
+            db,
+            event_type="backup_import",
+            result="failure",
+            reason="import_error",
+            actor_user=user,
+            target_type="backup",
+            detail="backup import database write failed",
+            request_path="/backup/import-v3",
+        )
+        raise
 
     total_imported = sum(item["imported_count"] for item in result.values())
     total_skipped = sum(item["skipped_count"] for item in result.values())
     total_failed = sum(item["failed_count"] for item in result.values())
+
+    record_security_audit(
+        db,
+        event_type="backup_import",
+        result="success",
+        reason="success",
+        actor_user=user,
+        target_type="backup",
+        detail=f"total_imported={total_imported}; total_skipped={total_skipped}; total_failed={total_failed}",
+        request_path="/backup/import-v3",
+    )
 
     return {
         "message": "备份导入完成",
