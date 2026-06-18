@@ -5,8 +5,13 @@
 
 const HISTORY_DANGER_API = "http://127.0.0.1:8000";
 const HISTORY_USER_TOKEN_KEY = "xgw_user_token";
+const HISTORY_CLEAR_CONFIRM_TEXT = "清空历史";
 let historyClearAllVerifyToken = "";
 let historyClearRangeVerifyToken = "";
+
+function normalizeHistoryConfirmText(value) {
+    return String(value || "").replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
+}
 
 window.addEventListener("load", () => {
     setTimeout(checkAndInjectHistoryDangerButton, 800);
@@ -85,7 +90,7 @@ function injectHistoryDangerButton() {
             </div>
             <div class="form-row">
                 <label>确认文字</label>
-                <input id="clearHistoryRangeConfirmText" placeholder="必须输入：清空历史" oninput="clearHistoryRangeMessage()">
+                <input id="clearHistoryRangeConfirmText" placeholder="必须输入：${HISTORY_CLEAR_CONFIRM_TEXT}" oninput="clearHistoryRangeMessage()">
             </div>
             <div class="form-row">
                 <label>动态验证码</label>
@@ -373,7 +378,7 @@ function openClearHistoryModal() {
 
             <div class="form-row">
                 <label>确认文字</label>
-                <input id="clearHistoryConfirmText" placeholder="请输入：清空历史">
+                <input id="clearHistoryConfirmText" placeholder="请输入：${HISTORY_CLEAR_CONFIRM_TEXT}">
             </div>
 
             <div class="form-row">
@@ -429,7 +434,7 @@ function closeClearHistoryModal() {
 async function clearAllUpdateHistory() {
     const token = localStorage.getItem(HISTORY_USER_TOKEN_KEY);
     const systemPassword = document.getElementById("clearHistorySystemPassword").value.trim();
-    const confirmText = document.getElementById("clearHistoryConfirmText").value.trim();
+    const confirmText = normalizeHistoryConfirmText(document.getElementById("clearHistoryConfirmText").value);
     const verifyCode = document.getElementById("clearHistoryVerifyCode").value.trim().toUpperCase();
     const message = document.getElementById("clearHistoryMessage");
 
@@ -443,8 +448,8 @@ async function clearAllUpdateHistory() {
         return;
     }
 
-    if (confirmText !== "清空历史") {
-        alert("确认文字不正确，请输入：清空历史");
+    if (confirmText !== HISTORY_CLEAR_CONFIRM_TEXT) {
+        alert(`确认文字不正确，请输入：${HISTORY_CLEAR_CONFIRM_TEXT}`);
         return;
     }
 
@@ -540,7 +545,7 @@ async function clearRangeUpdateHistory() {
     const startDate = document.getElementById("clearHistoryRangeStartDate").value.trim();
     const endDate = document.getElementById("clearHistoryRangeEndDate").value.trim();
     const systemPassword = document.getElementById("clearHistoryRangeSystemPassword").value.trim();
-    const confirmText = document.getElementById("clearHistoryRangeConfirmText").value.trim();
+    const confirmText = normalizeHistoryConfirmText(document.getElementById("clearHistoryRangeConfirmText").value);
     const verifyCode = document.getElementById("clearHistoryRangeVerifyCode").value.trim().toUpperCase();
     clearHistoryRangeMessage();
 
@@ -560,8 +565,8 @@ async function clearRangeUpdateHistory() {
         return;
     }
 
-    if (confirmText !== "清空历史") {
-        setHistoryRangeMessage("确认文字不正确，请输入：清空历史");
+    if (confirmText !== HISTORY_CLEAR_CONFIRM_TEXT) {
+        setHistoryRangeMessage(`确认文字不正确，请输入：${HISTORY_CLEAR_CONFIRM_TEXT}`);
         return;
     }
 

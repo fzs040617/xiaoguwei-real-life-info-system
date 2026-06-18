@@ -1283,6 +1283,8 @@ def import_backup(
     backup_data: BackupImportRequest,
     db: Session = Depends(get_db)
 ):
+    raise HTTPException(status_code=410, detail="该旧接口已停用，请使用 /backup/import-v3")
+
     require_admin_token(db, backup_data.token)
     verify_system_password(backup_data.system_password or backup_data.password or "")
 
@@ -2467,6 +2469,8 @@ def clear_all_update_history(
     request: ClearUpdateHistoryRequest,
     db: Session = Depends(get_db)
 ):
+    raise HTTPException(status_code=410, detail="该旧接口已停用，请使用 /update-history/clear-all-admin-v2")
+
     require_admin_token(db, request.token)
     verify_system_password(request.password)
 
@@ -2621,6 +2625,8 @@ def import_backup_data(
     request: BackupImportRequest,
     db: Session = Depends(get_db)
 ):
+    raise HTTPException(status_code=410, detail="该旧接口已停用，请使用 /backup/import-v3")
+
     require_admin_token(db, request.token)
     verify_system_password(request.password)
 
@@ -2782,6 +2788,8 @@ def import_backup_data_v2(
     request: BackupImportSecureRequest,
     db: Session = Depends(get_db)
 ):
+    raise HTTPException(status_code=410, detail="该旧接口已停用，请使用 /backup/import-v3")
+
     require_admin_token(db, request.token)
     verify_system_password(request.password)
     verify_admin_code(request.verify_token, request.verify_code, "backup_import")
@@ -3230,6 +3238,8 @@ def clear_all_update_history_admin(
     request: ClearUpdateHistoryAdminRequest,
     db: Session = Depends(get_db)
 ):
+    raise HTTPException(status_code=410, detail="该旧接口已停用，请使用 /update-history/clear-all-admin-v2")
+
     user = get_user_by_token(db, request.token)
 
     if user.role != "admin":
