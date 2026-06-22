@@ -10,12 +10,28 @@ function getQueryParam(name) {
     return params.get(name);
 }
 
+function renderMissingClueIdState() {
+    return `
+        <div class="empty detail-missing-state">
+            <div class="empty-icon">🧭</div>
+            <h2>缺少线索 ID，请从线索列表或审核中心进入详情页。</h2>
+            <p>当前页面没有携带 <code>?id=xxx</code> 参数，因此无法加载具体线索。</p>
+            <div class="empty-actions">
+                <button class="small-button" onclick="location.href='admin.html'">返回审核中心</button>
+                <button class="small-button btn-secondary" onclick="location.href='index.html'">返回首页</button>
+            </div>
+        </div>
+    `;
+}
+
 async function loadClueDetail() {
     const id = getQueryParam("id");
     const box = document.getElementById("detailBox");
 
     if (!id) {
-        box.innerHTML = `<div class="empty">缺少线索 ID。</div>`;
+        if (box) {
+            box.innerHTML = renderMissingClueIdState();
+        }
         return;
     }
 

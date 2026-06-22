@@ -30,6 +30,48 @@
 </div>
 
 <div class="container">
+    <div class="page-hero collector-hero">
+        <div class="hero-kicker">公开来源 · 合规采集 · 人工入库</div>
+        <h2>把校园周边的公开生活情报先收进线索篮</h2>
+        <p>面向公开 URL、RSS、JSON API 和人工摘录内容，先沉淀到采集条目，经过审核后再转入线索库或真实库。</p>
+        <div class="hero-badges">
+            <span class="hero-badge">🔎 公开信息</span>
+            <span class="hero-badge">🧺 采集条目</span>
+            <span class="hero-badge">🛡️ 合规边界</span>
+            <span class="hero-badge">👀 人工复核</span>
+        </div>
+        <div class="workflow-strip" aria-hidden="true">
+            <div class="workflow-step">
+                <span>1</span>
+                <strong>公开 URL</strong>
+                <em>不登录、不用 cookie</em>
+            </div>
+            <div class="workflow-step">
+                <span>2</span>
+                <strong>采集条目</strong>
+                <em>先进入待审核池</em>
+            </div>
+            <div class="workflow-step">
+                <span>3</span>
+                <strong>人工转线索</strong>
+                <em>确认后再流转</em>
+            </div>
+            <div class="workflow-step">
+                <span>4</span>
+                <strong>真实库</strong>
+                <em>保留来源和状态</em>
+            </div>
+        </div>
+        <div class="compliance-ribbon" aria-hidden="true">
+            <span class="status-pill status-success">公开可访问</span>
+            <span class="status-pill status-info">限速采集</span>
+            <span class="status-pill status-warning">人工审核</span>
+            <span class="status-pill status-danger">不绕反爬</span>
+        </div>
+    </div>
+
+    <div class="collector-workbench">
+        <main class="collector-workbench-main">
     <div id="collector-section-create" class="box collector-panel" data-section-id="create">
         <div class="collector-panel-header">
             <div>
@@ -39,6 +81,11 @@
             <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-create">收起</button>
         </div>
         <div class="collector-panel-body">
+            <div class="collector-config-steps" aria-label="采集源配置步骤">
+                <div class="collector-config-step"><span>1</span><strong>填来源</strong><em>名称、平台、URL</em></div>
+                <div class="collector-config-step"><span>2</span><strong>设规则</strong><em>类型、启用、关键词</em></div>
+                <div class="collector-config-step"><span>3</span><strong>保存到采集篮</strong><em>等待预览和审核</em></div>
+            </div>
             <p class="notice">
                 第一版只支持公开可访问的数据源，不处理登录、验证码、私密内容、付费墙或需要特殊授权的接口。
                 不要填写平台账号、cookie、token、密钥。
@@ -92,8 +139,10 @@
                 <textarea id="collectorNotes" placeholder="说明来源用途、公开性和人工确认情况"></textarea>
             </div>
 
-            <button onclick="submitCollectorSource()">新增采集源</button>
-            <button style="margin-left: 8px;" onclick="runAllCollectorSources()">运行全部启用源</button>
+            <div class="collector-form-actions">
+                <button onclick="submitCollectorSource()">新增采集源</button>
+                <button class="btn-secondary" onclick="runAllCollectorSources()">运行全部启用源</button>
+            </div>
 
             <div id="collectorMessage" class="message"></div>
             <div class="collector-collapse-row">
@@ -127,6 +176,10 @@
             <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-manual">收起</button>
         </div>
         <div class="collector-panel-body">
+            <div class="manual-workbench-intro">
+                <strong>适合手动整理公开页面摘要、商家公开介绍、活动信息或人工确认内容。</strong>
+                <span>系统只保存你手动录入的文本，不访问外部账号环境。</span>
+            </div>
             <p class="notice">保存时不访问外部 URL，不读取账号、cookie、token 或密钥。</p>
             <div class="collector-form-grid collector-manual-grid">
                 <div class="form-row">
@@ -273,6 +326,49 @@
                 <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-runs">收起本区</button>
             </div>
         </div>
+    </div>
+        </main>
+
+        <aside class="collector-workbench-aside" aria-label="采集工作台辅助信息">
+            <div class="workbench-aside-card">
+                <div class="aside-card-kicker">工作流</div>
+                <h3>公开信息先入篮，再审核</h3>
+                <ol class="aside-steps">
+                    <li><span>1</span><strong>配置来源</strong><em>填写公开 URL、平台和类型</em></li>
+                    <li><span>2</span><strong>识别内容</strong><em>预览或手动摘录公开信息</em></li>
+                    <li><span>3</span><strong>进入采集条目</strong><em>状态保持 new，等待处理</em></li>
+                    <li><span>4</span><strong>人工转线索</strong><em>审核后再进入线索库</em></li>
+                </ol>
+            </div>
+
+            <div class="workbench-aside-card">
+                <div class="aside-card-kicker">合规边界</div>
+                <h3>只处理可公开访问内容</h3>
+                <ul class="aside-checklist">
+                    <li>不登录平台，不使用 cookie。</li>
+                    <li>不绕验证码，不绕反爬。</li>
+                    <li>不抓付费、私密、受限内容。</li>
+                    <li>采集结果人工审核后再入库。</li>
+                </ul>
+            </div>
+
+            <div class="workbench-aside-card">
+                <div class="aside-card-kicker">今日检查</div>
+                <h3>采集前快速确认</h3>
+                <div class="aside-mini-grid">
+                    <span>URL 可公开访问</span>
+                    <span>字段可追溯</span>
+                    <span>来源说明完整</span>
+                    <span>异常源已筛查</span>
+                </div>
+            </div>
+
+            <div class="workbench-aside-card muted">
+                <div class="aside-card-kicker">下一阶段</div>
+                <h3>合法公开 URL 采集 MVP</h3>
+                <p>后续可在当前工作台基础上扩展批量 URL 导入、失败行提示、重复链接识别和人工审核流。</p>
+            </div>
+        </aside>
     </div>
 </div>
 

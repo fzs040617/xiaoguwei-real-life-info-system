@@ -14,17 +14,28 @@ async function loadFeedback(targetType) {
     const targetId = getFeedbackQueryParam("id");
     const box = document.getElementById("feedbackList");
 
-    if (!box || !targetId) {
+    if (!box) {
+        return;
+    }
+
+    if (!targetId) {
+        box.innerHTML = `<div class="empty">暂无反馈，或请先选择一条线索。</div>`;
         return;
     }
 
     try {
         const response = await fetch(`${FEEDBACK_API_BASE}/feedbacks?target_type=${targetType}&target_id=${targetId}`);
         const data = await response.json();
+
+        if (!response.ok) {
+            box.innerHTML = `<div class="empty">反馈加载失败：${feedbackEscapeHtml(JSON.stringify(data))}</div>`;
+            return;
+        }
+
         const feedbacks = data.data || [];
 
         if (feedbacks.length === 0) {
-            box.innerHTML = `<div class="empty">暂无用户反馈。你可以提交第一条补充信息。</div>`;
+            box.innerHTML = `<div class="empty">还没有用户反馈，后续可在这里补充纠错、过期提醒或价格变化。</div>`;
             return;
         }
 
