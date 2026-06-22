@@ -5,7 +5,7 @@
     <title>审核中心｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body onload="loadHomeData()">
+<body class="admin-page" onload="loadHomeData()">
 
 <div class="header">
     <div class="header-inner">
@@ -30,6 +30,18 @@
 </div>
 
 <div class="container">
+
+    <div class="page-hero admin-hero">
+        <div class="hero-kicker">线索审核 · 人工确认 · 真实库沉淀</div>
+        <h2>审核中心</h2>
+        <p>汇集待核验线索、外部采集条目和用户反馈状态，人工确认后再同步到真实库，确保生活信息可追溯、可复核。</p>
+        <div class="hero-badges">
+            <span class="hero-badge">待核验</span>
+            <span class="hero-badge">外部线索</span>
+            <span class="hero-badge">人工审核</span>
+            <span class="hero-badge">真实库同步</span>
+        </div>
+    </div>
 
     <div class="box">
         <h2>审核说明</h2>
@@ -64,7 +76,7 @@
     <div class="section">
         <h2>线索审核列表</h2>
 
-        <div style="margin-bottom: 14px;">
+        <div class="review-quick-tabs">
             <button id="filterPending" class="small-button filter-button active" onclick="setClueFilter('pending')">只看待核验</button>
             <button id="filterApproved" class="small-button filter-button" onclick="setClueFilter('approved')">只看已转入真实库</button>
             <button id="filterAll" class="small-button filter-button" onclick="setClueFilter('all')">查看全部线索</button>

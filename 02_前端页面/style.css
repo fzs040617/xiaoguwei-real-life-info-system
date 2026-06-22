@@ -3121,6 +3121,265 @@ button:hover,
     }
 }
 
+/* 系统美化一期 G：审核中心整页工作台化 */
+.admin-page {
+    background:
+        radial-gradient(circle at 12% 8%, rgba(31, 122, 77, 0.08), transparent 28%),
+        radial-gradient(circle at 92% 10%, rgba(45, 110, 160, 0.06), transparent 30%),
+        linear-gradient(180deg, #f6faf8 0%, #eef5f2 100%);
+}
+
+.admin-page .container {
+    max-width: 1240px;
+}
+
+.admin-hero {
+    background:
+        radial-gradient(circle at 12% 18%, rgba(255, 207, 92, 0.22), transparent 30%),
+        radial-gradient(circle at 88% 10%, rgba(72, 175, 144, 0.18), transparent 34%),
+        linear-gradient(135deg, #f7fff9 0%, #eef8ff 52%, #fff8ea 100%);
+}
+
+.admin-page .container > .box,
+.admin-page .container > .section {
+    border-color: rgba(33, 70, 58, 0.1);
+    border-radius: 18px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(252, 254, 253, 0.96)),
+        #ffffff;
+    box-shadow:
+        0 1px 2px rgba(24, 50, 42, 0.04),
+        0 16px 38px rgba(32, 74, 63, 0.08);
+}
+
+.admin-page .container > .box::before,
+.admin-page .container > .section::before {
+    width: 3px;
+    background: linear-gradient(180deg, rgba(31, 122, 77, 0.9), rgba(31, 122, 77, 0.12));
+}
+
+.admin-page .container > .box h2,
+.admin-page .container > .section h2 {
+    color: #173f34;
+}
+
+.admin-page .container > .box:nth-of-type(2),
+.admin-page .container > .box:nth-of-type(3) {
+    display: inline-block;
+    width: calc(50% - 10px);
+    min-height: 180px;
+    vertical-align: top;
+}
+
+.admin-page .container > .box:nth-of-type(2) {
+    margin-right: 16px;
+}
+
+.admin-page .notice {
+    border: 1px solid #dbeee5;
+    border-left: 4px solid #1f7a4d;
+    border-radius: 12px;
+    background: #f6fbf8;
+    color: #3d5c51;
+    line-height: 1.75;
+}
+
+.admin-page .search-box {
+    padding: 12px;
+    border: 1px solid #e4eee9;
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, #ffffff 0%, #f8fbf9 100%);
+}
+
+.admin-page .search-box input {
+    min-height: 44px;
+    border-color: rgba(38, 86, 70, 0.14);
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.admin-page .review-quick-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 10px;
+    border: 1px solid #e4eee9;
+    border-radius: 14px;
+    background: #fbfdfc;
+}
+
+.admin-page .clue-filter-panel {
+    border-color: rgba(33, 70, 58, 0.1);
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, #ffffff 0%, #f8fbf9 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.admin-page .clue-filter-grid {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+}
+
+.admin-page .clue-filter-grid label {
+    padding: 12px;
+    border: 1px solid #e4eee9;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.admin-page .clue-filter-grid select {
+    min-height: 42px;
+    border-color: rgba(38, 86, 70, 0.14);
+    border-radius: 10px;
+}
+
+.admin-page .clue-filter-actions {
+    padding-top: 12px;
+}
+
+.admin-page .clue-filter-summary,
+.admin-page #clueFilterNotice {
+    border: 1px solid #dce9e3;
+    border-radius: 999px;
+    background: #f8fbf9;
+    color: #53685f;
+    font-weight: 700;
+}
+
+.admin-page #verifiedResults,
+.admin-page #clueResults {
+    display: grid;
+    gap: 14px;
+}
+
+.admin-page #clueResults .card {
+    position: relative;
+    padding: 18px;
+    border: 1px solid rgba(33, 70, 58, 0.1);
+    border-radius: 18px;
+    background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(249, 252, 250, 0.98)),
+        #ffffff;
+    box-shadow:
+        0 1px 2px rgba(26, 64, 55, 0.04),
+        0 14px 32px rgba(26, 64, 55, 0.07);
+}
+
+.admin-page #clueResults .card::before {
+    content: "";
+    position: absolute;
+    left: 18px;
+    top: 18px;
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    border: 1px solid rgba(31, 122, 77, 0.12);
+    background:
+        linear-gradient(135deg, rgba(31, 122, 77, 0.14), rgba(35, 101, 106, 0.08));
+}
+
+.admin-page #clueResults .card h3,
+.admin-page #clueResults .clue-card-tags,
+.admin-page #clueResults .clue-source-line,
+.admin-page #clueResults .summary,
+.admin-page #clueResults .clue-review-tip,
+.admin-page #clueResults .action-row {
+    margin-left: 48px;
+}
+
+.admin-page #clueResults .card h3 {
+    margin-top: 10px;
+    margin-bottom: 10px;
+    color: #142f28;
+    font-size: 18px;
+    line-height: 1.35;
+}
+
+.admin-page .clue-card-tags {
+    gap: 8px;
+}
+
+.admin-page .clue-card-tags .tag {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    word-break: keep-all;
+}
+
+.admin-page .clue-source-line {
+    color: #5f746d;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+.admin-page #clueResults .summary {
+    max-height: 150px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #fbfdfc;
+    color: #3f554d;
+    line-height: 1.7;
+    overflow: auto;
+}
+
+.admin-page .clue-review-tip {
+    border-radius: 12px;
+}
+
+.admin-page .action-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px;
+    border-top: 1px dashed #dfeae5;
+    background: #fbfdfc;
+    border-radius: 12px;
+}
+
+.admin-page .action-title {
+    flex: 0 0 100%;
+    margin-bottom: 0;
+    color: #31584b;
+    font-weight: 800;
+}
+
+.admin-page #clueResults .empty {
+    min-height: 120px;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 900px) {
+    .admin-page .container > .box:nth-of-type(2),
+    .admin-page .container > .box:nth-of-type(3) {
+        display: block;
+        width: 100%;
+        min-height: 0;
+        margin-right: 0;
+    }
+
+    .admin-page .clue-filter-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-page #clueResults .card h3,
+    .admin-page #clueResults .clue-card-tags,
+    .admin-page #clueResults .clue-source-line,
+    .admin-page #clueResults .summary,
+    .admin-page #clueResults .clue-review-tip,
+    .admin-page #clueResults .action-row {
+        margin-left: 0;
+    }
+
+    .admin-page #clueResults .card::before {
+        display: none;
+    }
+}
+
 /* 系统美化一期 F 三次小修：采集源卡片内部紧凑化 */
 .collector-page .collector-source-item {
     padding: 14px 16px;
