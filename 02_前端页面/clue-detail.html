@@ -31,14 +31,14 @@
 
 <div class="container">
     <div class="page-hero clue-detail-hero">
-        <div class="hero-kicker">线索详情 · 用户反馈 · 审核流转</div>
-        <h2>跟踪一条生活线索从发现到确认的全过程</h2>
-        <p>这里展示来源、分类、审核状态和用户反馈。没有线索 ID 时，页面会给出明确入口，不再停留在加载中。</p>
+        <div class="hero-kicker">线索详情</div>
+        <h2>线索详情</h2>
+        <p>查看来源、反馈与核验信息，辅助判断是否进入真实库。</p>
         <div class="hero-badges">
-            <span class="hero-badge">📍 来源信息</span>
-            <span class="hero-badge">💬 用户反馈</span>
-            <span class="hero-badge">🧪 人工核验</span>
-            <span class="hero-badge">📦 真实库同步</span>
+            <span class="hero-badge">来源追溯</span>
+            <span class="hero-badge">人工反馈</span>
+            <span class="hero-badge">状态流转</span>
+            <span class="hero-badge">真实库沉淀</span>
         </div>
         <div class="lifecycle-track" aria-hidden="true">
             <div class="lifecycle-step is-active">
@@ -60,13 +60,36 @@
         </div>
     </div>
 
-    <div class="detail-return-row">
-        <button class="small-button" onclick="location.href='admin.html'">返回审核中心</button>
-    </div>
+    <div class="clue-detail-workbench">
+        <main class="clue-detail-main">
+            <div id="detailBox" class="empty">正在加载线索详情...</div>
 
-    <div id="detailBox" class="empty">正在加载线索详情...</div>
+            <div class="section clue-feedback-list-panel">
+                <h2>已有反馈</h2>
+                <div id="feedbackList" class="empty">正在加载反馈...</div>
+            </div>
+        </main>
 
-    <div class="box">
+        <aside class="clue-detail-aside" aria-label="线索详情辅助信息">
+            <div class="box clue-side-card">
+                <h2>操作入口</h2>
+                <div class="detail-return-row">
+                    <button class="small-button" onclick="location.href='admin.html'">返回审核中心</button>
+                    <button class="small-button btn-secondary" onclick="location.href='index.html'">返回首页</button>
+                </div>
+            </div>
+
+            <div class="box clue-side-card">
+                <h2>流转路径</h2>
+                <div class="clue-side-steps">
+                    <div><span>1</span><strong>来源追溯</strong><em>确认平台、链接和摘要</em></div>
+                    <div><span>2</span><strong>反馈沉淀</strong><em>收集纠错、过期、价格变化</em></div>
+                    <div><span>3</span><strong>人工核验</strong><em>管理员判断是否可信</em></div>
+                    <div><span>4</span><strong>真实库沉淀</strong><em>审核通过后同步到真实库</em></div>
+                </div>
+            </div>
+
+            <div class="box clue-feedback-form-panel">
         <h2>用户反馈与补充</h2>
         <p class="notice">
             这里可以提交补充信息、纠错、过期提醒、价格变化等反馈。反馈不会直接改变真实库，需要后续审核。
@@ -97,10 +120,7 @@
         <button onclick="submitFeedback('clue')">提交反馈</button>
         <div id="feedbackMessage" class="message"></div>
     </div>
-
-    <div class="section">
-        <h2>已有反馈</h2>
-        <div id="feedbackList" class="empty">正在加载反馈...</div>
+        </aside>
     </div>
 </div>
 

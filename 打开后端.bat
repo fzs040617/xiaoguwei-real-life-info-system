@@ -5,7 +5,9 @@ title XGW Backend
 set "ROOT=%~dp0"
 set "BACKEND="
 set "FRONTEND_INDEX="
+set "FRONTEND_URL="
 set "BACKEND_PYTHON="
+set "CHROME=C:\Program Files\Google\Chrome\Application\chrome.exe"
 
 echo Project root:
 echo %ROOT%
@@ -32,20 +34,10 @@ for /d %%F in ("%ROOT%02_*") do (
     )
 )
 
-if defined FRONTEND_INDEX (
-    echo Opening frontend index.html...
-    start "" "%FRONTEND_INDEX%"
-) else (
-    echo WARNING: Cannot find frontend index.html.
-    echo Backend startup will continue.
-)
-
 echo.
 echo Backend folder:
 echo %BACKEND%
 echo.
-
-cd /d "%BACKEND%"
 
 set "BACKEND_PYTHON=%BACKEND%\.venv\Scripts\python.exe"
 
@@ -58,12 +50,37 @@ if not exist "%BACKEND_PYTHON%" (
     exit /b 1
 )
 
-echo Starting backend with project virtual environment Python...
+if not exist "%CHROME%" set "CHROME=C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+
+if defined FRONTEND_INDEX (
+    set "FRONTEND_URL=file:///%FRONTEND_INDEX:\=/%"
+) else (
+    echo WARNING: Cannot find frontend index.html.
+    echo Browser auto-open will be skipped.
+)
+
+echo Starting backend with project virtual environment Python in a new window...
 echo API docs: http://127.0.0.1:8000/docs
 echo.
 
-"%BACKEND_PYTHON%" -m uvicorn app:app --reload --host 127.0.0.1 --port 8000
+start "XGW Backend" /D "%BACKEND%" cmd /k call "%BACKEND_PYTHON%" -m uvicorn app:app --reload --host 127.0.0.1 --port 8000
 
 echo.
-echo Backend process ended.
+echo Waiting for backend startup before opening the homepage...
+timeout /t 3 /nobreak >nul
+
+if defined FRONTEND_URL (
+    echo Opening homepage:
+    echo %FRONTEND_URL%
+    if exist "%CHROME%" (
+        start "" "%CHROME%" "%FRONTEND_URL%"
+    ) else (
+        echo Chrome was not found in the common install paths. Using the default browser instead.
+        start "" "%FRONTEND_URL%"
+    )
+)
+
+echo.
+echo Backend is running in the separate window titled XGW Backend.
+echo You can close this launcher window.
 pause

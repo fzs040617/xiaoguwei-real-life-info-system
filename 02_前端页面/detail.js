@@ -47,6 +47,10 @@ async function loadClueDetail() {
         const status = item.status || "待核验";
         const externalClue = isDetailExternalClue(item);
         const statusTip = getDetailReviewTip(item);
+        const cleanedSummary = getDisplaySummary(item.summary);
+        const displayTitle = getClueDetailTitle(item, cleanedSummary);
+        const displaySourcePlatform = getDisplaySourcePlatform(item.source_platform);
+        const displaySourceUrl = getDisplaySourceUrl(item.source_url);
 
         box.innerHTML = `
             <div class="card clue-detail-card">
@@ -57,20 +61,20 @@ async function loadClueDetail() {
                     ${externalClue ? `<span class="tag external-clue-tag">外部线索</span>` : ""}
                 </div>
 
-                <h2>${escapeHtml(item.title)}</h2>
+                <h2>${escapeHtml(displayTitle)}</h2>
 
                 <div class="clue-detail-meta">
                     <div><strong>ID：</strong>${item.id}</div>
                     <div><strong>当前状态：</strong>${escapeHtml(status)}</div>
                     <div><strong>分类：</strong>${escapeHtml(item.category || "未分类")}</div>
-                    <div><strong>来源平台：</strong>${escapeHtml(item.source_platform || "未知来源")}</div>
-                    <div><strong>来源链接：</strong>${item.source_url ? `<a href="${escapeAttr(item.source_url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.source_url)}</a>` : "暂无链接"}</div>
+                    <div><strong>来源平台：</strong>${escapeHtml(displaySourcePlatform)}</div>
+                    <div><strong>来源链接：</strong>${displaySourceUrl ? `<a href="${escapeAttr(displaySourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displaySourceUrl)}</a>` : "暂无公开链接"}</div>
                     <div><strong>创建时间：</strong>${escapeHtml(item.created_at || "未知")}</div>
                 </div>
 
-                <div class="summary">
-                    <strong>线索简介：</strong><br>
-                    ${escapeHtml(item.summary || "暂无简介")}
+                <div class="summary clue-summary-block">
+                    <strong>线索简介</strong>
+                    <p>${escapeHtml(cleanedSummary || "暂无简介，等待用户补充。")}</p>
                 </div>
 
                 <div class="clue-review-tip ${getDetailReviewTipClass(item)}">${escapeHtml(statusTip)}</div>
@@ -274,7 +278,134 @@ function getStatusTagClass(status) {
 function isDetailExternalClue(item) {
     const category = item.category || "";
     const sourcePlatform = item.source_platform || "";
-    return category === "外部线索" || Boolean(sourcePlatform) || Boolean(item.source_url);
+    return category === "外部线索" || isMeaningfulDetailValue(sourcePlatform) || isValidHttpUrl(item.source_url);
+}
+
+function cleanImportedText(value) {
+    let text = normalizeDetailText(value);
+
+    for (let i = 0; i < 8; i += 1) {
+        const before = text;
+
+        text = text
+            .replace(/^\s*(?:来源平台)\s*[：:]\s*(?:留空|无|暂无|null|undefined|none|n\/a)?\s*/i, "")
+            .replace(/^\s*(?:URL|链接|来源链接)\s*[：:]\s*(?:留空|无|暂无|null|undefined|none|n\/a)?\s*/i, "")
+            .replace(/^\s*(?:粘贴公开文本|公开文本|文本|内容)\s*[：:]\s*/i, "")
+            .replace(/^\s*(?:留空|无|暂无|null|undefined|none|n\/a)\s+/i, "")
+            .trim();
+
+        if (text === before) {
+            break;
+        }
+    }
+
+    return text;
+}
+
+function getClueDetailTitle(item, cleanedSummary) {
+    const rawTitle = normalizeDetailText(item.title);
+
+    if (isUsableDetailTitle(rawTitle)) {
+        return rawTitle;
+    }
+
+    const summaryTitle = extractTitleFromSummary(cleanedSummary);
+    if (summaryTitle) {
+        return summaryTitle;
+    }
+
+    if (isMeaningfulDetailValue(item.category) && item.id) {
+        return `${normalizeDetailText(item.category)}线索 #${item.id}`;
+    }
+
+    if (item.id) {
+        return `线索 #${item.id}`;
+    }
+
+    return "线索详情";
+}
+
+function getDisplaySummary(value) {
+    const cleaned = cleanImportedText(value);
+    return isMeaningfulDetailValue(cleaned) ? cleaned : "";
+}
+
+function getDisplaySourcePlatform(value) {
+    const cleaned = cleanImportedText(value);
+    return isMeaningfulDetailValue(cleaned) ? cleaned : "暂无来源平台";
+}
+
+function getDisplaySourceUrl(value) {
+    const cleaned = cleanImportedText(value);
+    return isValidHttpUrl(cleaned) ? cleaned : "";
+}
+
+function isUsableDetailTitle(value) {
+    if (!isMeaningfulDetailValue(value)) {
+        return false;
+    }
+
+    if (/^(?:来源平台|URL|链接|来源链接|粘贴公开文本|公开文本|文本|内容)\s*[：:]/i.test(value)) {
+        return false;
+    }
+
+    return Boolean(cleanImportedText(value));
+}
+
+function extractTitleFromSummary(value) {
+    const text = normalizeDetailText(value);
+    if (!isMeaningfulDetailValue(text)) {
+        return "";
+    }
+
+    const firstSentence = text.split(/[。！？!?]/)[0].trim();
+    const candidate = firstSentence || text;
+    return candidate.length > 30 ? `${candidate.slice(0, 30)}...` : candidate;
+}
+
+function isMeaningfulDetailValue(value) {
+    const text = normalizeDetailText(value).toLowerCase();
+    const invalidValues = new Set([
+        "",
+        "留空",
+        "无",
+        "暂无",
+        "null",
+        "undefined",
+        "none",
+        "nan",
+        "n/a",
+        "-"
+    ]);
+
+    if (invalidValues.has(text)) {
+        return false;
+    }
+
+    if (/^\d{1,3}$/.test(normalizeDetailText(value))) {
+        return false;
+    }
+
+    return true;
+}
+
+function isValidHttpUrl(value) {
+    const text = normalizeDetailText(value);
+
+    if (!isMeaningfulDetailValue(text)) {
+        return false;
+    }
+
+    try {
+        const url = new URL(text);
+        return url.protocol === "http:" || url.protocol === "https:";
+    } catch (error) {
+        return false;
+    }
+}
+
+function normalizeDetailText(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 function getDetailReviewTip(item) {
