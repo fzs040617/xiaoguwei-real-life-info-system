@@ -199,6 +199,7 @@ function handleCollectorPageClick(event) {
     handleCollectorItemClearFilterClick(event);
     handleCollectorManualDetectClick(event);
     handleCollectorManualImportClick(event);
+    handleCollectorManualClearClick(event);
     handleCollectorSourceCollapseClick(event);
     handleCollectorSourceDetailClick(event);
     handleCollectorSourceFilterClick(event);
@@ -351,6 +352,17 @@ function handleCollectorManualDetectClick(event) {
     event.stopPropagation();
 
     detectManualCollectorItem();
+}
+
+function handleCollectorManualClearClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest('[data-action="manual-clear"]') : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    clearManualCollectorForm();
 }
 
 function handleCollectorSourceCollapseClick(event) {
@@ -524,7 +536,11 @@ function setCollectorSectionExpanded(sectionId, expanded) {
     section.classList.toggle("collector-section-collapsed", !expanded);
     const btn = section.querySelector('[data-action="toggle-section"]');
     if (btn) {
-        btn.textContent = expanded ? "收起" : "展开";
+        if (sectionId === "collector-section-sources") {
+            btn.textContent = expanded ? "收起列表" : "展开列表";
+        } else {
+            btn.textContent = expanded ? "收起" : "展开";
+        }
     }
 }
 
@@ -886,6 +902,21 @@ async function detectManualCollectorItem() {
         return;
     }
 
+    if (rawText) {
+        const parsed = parseManualImportText(rawText);
+        if (parsed.hasContent) {
+            setManualPlatformValue(parsed.platform || (platformInput ? platformInput.value : "") || "公开文本");
+            if (urlInput) urlInput.value = parsed.url || "";
+            if (titleInput) titleInput.value = parsed.title || "";
+            if (summaryInput) summaryInput.value = parsed.summary || "";
+            if (notesInput) notesInput.value = parsed.sourceNote || "";
+            collectorManualMessage("已识别并填入字段，请核对后导入。");
+            return;
+        }
+        collectorManualMessage("未识别到明确字段，请手动填写标题或摘要。", true);
+        return;
+    }
+
     collectorManualMessage("正在识别人工导入信息...");
 
     try {
@@ -904,7 +935,7 @@ async function detectManualCollectorItem() {
         });
 
         if (platformInput && data.platform) {
-            platformInput.value = data.platform;
+            setManualPlatformValue(data.platform);
         }
         if (titleInput && data.title) {
             titleInput.value = data.title;
@@ -924,45 +955,219 @@ async function detectManualCollectorItem() {
 }
 
 async function submitManualCollectorItem() {
-    const platform = document.getElementById("manualPlatform").value.trim() || "人工导入";
-    const title = document.getElementById("manualTitle").value.trim();
-    const url = document.getElementById("manualUrl").value.trim();
-    const summary = document.getElementById("manualSummary").value.trim();
-    const notes = document.getElementById("manualNotes").value.trim();
+    const importButton = document.querySelector('[data-action="manual-import"]');
+    const platform = cleanManualImportText(document.getElementById("manualPlatform").value) || "公开文本";
+    const title = cleanManualImportText(document.getElementById("manualTitle").value);
+    const rawUrl = cleanManualImportText(document.getElementById("manualUrl").value);
+    const summary = cleanManualImportText(document.getElementById("manualSummary").value);
+    const notes = cleanManualImportText(document.getElementById("manualNotes").value);
+    const urlCheck = normalizeManualImportUrl(rawUrl);
 
-    if (!title) {
-        collectorManualMessage("人工导入失败：标题不能为空", true);
+    if (!title && !summary) {
+        collectorManualMessage("人工导入失败：标题和摘要至少填写一个", true);
         return;
     }
 
+    if (!urlCheck.ok) {
+        collectorManualMessage(urlCheck.message, true);
+        return;
+    }
+
+    const originalText = importButton ? importButton.textContent : "";
+    if (importButton) {
+        importButton.disabled = true;
+        importButton.textContent = "导入中...";
+    }
+    collectorManualMessage("导入中...");
+
     try {
-        await collectorRequest("/collector-admin/items/manual", {
+        const data = await collectorRequest("/collector-admin/items/manual", {
             method: "POST",
             headers: {"Content-Type": "application/json"},
             body: JSON.stringify({
                 token: collectorToken(),
                 platform,
                 title,
-                url,
+                url: urlCheck.url,
                 summary,
-                notes
+                notes,
+                source_note: notes
             })
         });
-        collectorManualMessage("人工导入保存成功，已加入采集条目");
-        document.getElementById("manualPlatform").value = "";
-        document.getElementById("manualTitle").value = "";
-        document.getElementById("manualUrl").value = "";
-        document.getElementById("manualSummary").value = "";
-        document.getElementById("manualNotes").value = "";
-        const rawTextInput = document.getElementById("manualRawText");
-        if (rawTextInput) {
-            rawTextInput.value = "";
-        }
+        collectorManualMessage(data.message || "已导入采集条目，等待审核");
+        clearManualCollectorForm(false);
         expandCollectorSection("collector-section-items");
         await loadCollectorItems();
     } catch (error) {
         collectorManualMessage(`人工导入失败：${collectorErrorMessage(error)}`, true);
+    } finally {
+        if (importButton) {
+            importButton.disabled = false;
+            importButton.textContent = originalText || "导入采集条目";
+        }
     }
+}
+
+function clearManualCollectorForm(showMessage = true) {
+    setManualPlatformValue("公开文本");
+    ["manualTitle", "manualUrl", "manualSummary", "manualNotes", "manualRawText"].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = "";
+    });
+    if (showMessage) {
+        collectorManualMessage("已清空人工导入表单");
+    }
+}
+
+function setManualPlatformValue(value) {
+    const input = document.getElementById("manualPlatform");
+    if (!input) return;
+    const normalized = cleanManualImportText(value) || "公开文本";
+    const option = Array.from(input.options || []).find(item => item.value === normalized);
+    input.value = option ? normalized : "其他公开网页";
+}
+
+function cleanManualImportText(value) {
+    let text = String(value || "").replace(/\s+/g, " ").trim();
+    for (let index = 0; index < 8; index += 1) {
+        const before = text;
+        text = text
+            .replace(/^\s*(?:来源平台)\s*[：:]\s*(?:留空|无|暂无|null|undefined|none|nan|n\/a|-)?\s*/i, "")
+            .replace(/^\s*(?:URL|链接|来源链接|公开 URL)\s*[：:]\s*(?:留空|无|暂无|null|undefined|none|nan|n\/a|-)?\s*/i, "")
+            .replace(/^\s*(?:粘贴公开文本|公开文本|摘要|正文|文本|内容)\s*[：:]\s*/i, "")
+            .replace(/^\s*(?:留空|无|暂无|null|undefined|none|nan|n\/a|-)\s+/i, "")
+            .trim();
+        if (text === before) break;
+    }
+    return text;
+}
+
+function isMeaningfulManualValue(value) {
+    const text = cleanManualImportText(value);
+    const lowered = text.toLowerCase();
+    if (["", "留空", "无", "暂无", "null", "undefined", "none", "nan", "n/a", "-"].includes(lowered)) {
+        return false;
+    }
+    return !/^\d{1,3}$/.test(text);
+}
+
+function normalizeManualImportUrl(value) {
+    const text = cleanManualImportText(value);
+    if (!isMeaningfulManualValue(text)) {
+        return {ok: true, url: ""};
+    }
+
+    try {
+        const url = new URL(text);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+            url.hash = "";
+            return {ok: true, url: url.toString()};
+        }
+    } catch (error) {
+        // fall through to the shared validation message
+    }
+
+    return {
+        ok: false,
+        url: "",
+        message: "人工导入失败：公开 URL 必须是 http/https 链接，或留空"
+    };
+}
+
+function parseManualImportText(rawText) {
+    const fields = {
+        platform: "",
+        url: "",
+        title: "",
+        summary: "",
+        sourceNote: ""
+    };
+    const fieldAliases = {
+        "来源平台": "platform",
+        "平台": "platform",
+        "公开 URL": "url",
+        "公开URL": "url",
+        "URL": "url",
+        "链接": "url",
+        "标题": "title",
+        "摘要": "summary",
+        "正文": "summary",
+        "内容": "summary",
+        "来源说明": "sourceNote",
+        "说明": "sourceNote",
+        "备注": "sourceNote"
+    };
+    const fieldPattern = /^(来源平台|平台|公开\s*URL|URL|链接|标题|摘要|正文|内容|来源说明|说明|备注)\s*[：:]\s*(.*)$/i;
+    const lines = String(rawText || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    let currentField = "";
+    let foundField = false;
+
+    lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+
+        const match = trimmed.match(fieldPattern);
+        if (match) {
+            const normalizedLabel = match[1].replace(/\s+/g, "").toUpperCase() === "URL"
+                ? "URL"
+                : match[1].replace(/\s+/g, " ");
+            currentField = fieldAliases[normalizedLabel] || fieldAliases[match[1].replace(/\s+/g, "")] || "";
+            foundField = Boolean(currentField);
+            if (currentField) {
+                appendManualParsedField(fields, currentField, match[2] || "");
+            }
+            return;
+        }
+
+        if (currentField) {
+            appendManualParsedField(fields, currentField, trimmed);
+        }
+    });
+
+    if (!foundField) {
+        const text = cleanManualImportText(rawText);
+        if (!isMeaningfulManualValue(text)) {
+            return {...fields, hasContent: false};
+        }
+        return {
+            platform: "",
+            url: "",
+            title: titleFromManualFreeText(text),
+            summary: text,
+            sourceNote: "",
+            hasContent: true
+        };
+    }
+
+    fields.platform = isMeaningfulManualValue(fields.platform) ? cleanManualImportText(fields.platform) : "公开文本";
+    const urlCheck = normalizeManualImportUrl(fields.url);
+    fields.url = urlCheck.ok ? urlCheck.url : "";
+    fields.title = isMeaningfulManualValue(fields.title) ? cleanManualImportText(fields.title) : "";
+    fields.summary = isMeaningfulManualValue(fields.summary) ? cleanManualImportText(fields.summary) : "";
+    fields.sourceNote = isMeaningfulManualValue(fields.sourceNote) ? cleanManualImportText(fields.sourceNote) : "";
+
+    if (!fields.title && fields.summary) {
+        fields.title = titleFromManualFreeText(fields.summary);
+    }
+
+    return {
+        ...fields,
+        hasContent: Boolean(fields.title || fields.summary || fields.url || fields.sourceNote)
+    };
+}
+
+function appendManualParsedField(fields, field, value) {
+    const text = String(value || "").trim();
+    if (!text) return;
+    fields[field] = fields[field] ? `${fields[field]}\n${text}` : text;
+}
+
+function titleFromManualFreeText(text) {
+    const cleaned = cleanManualImportText(text);
+    if (!isMeaningfulManualValue(cleaned)) return "";
+    const firstSentence = cleaned.split(/[。！？!?]/)[0].trim();
+    const candidate = firstSentence || cleaned;
+    return candidate.length > 30 ? candidate.slice(0, 30) : candidate;
 }
 
 async function loadCollectorSourceItemCounts(sources) {

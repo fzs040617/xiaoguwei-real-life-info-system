@@ -5,7 +5,7 @@
     <title>反馈管理｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body onload="loadFeedbackAdminPage()">
+<body class="ops-page feedback-admin-page" onload="loadFeedbackAdminPage()">
 
 <div class="header">
     <div class="header-inner">
@@ -29,44 +29,64 @@
     </div>
 </div>
 
-<div class="container">
+<div class="container ops-container">
 
-    <div class="box">
-        <h2>反馈筛选</h2>
+    <div class="page-hero ops-hero feedback-admin-hero">
+        <div class="hero-kicker">反馈管理工作台</div>
+        <h2>反馈管理</h2>
+        <p>查看用户反馈、补充内容与核验线索，集中处理纠错、过期提醒和真实反馈。</p>
+        <div class="hero-badges">
+            <span class="hero-badge">用户反馈</span>
+            <span class="hero-badge">补充记录</span>
+            <span class="hero-badge">线索核验</span>
+            <span class="hero-badge">管理处理</span>
+        </div>
+    </div>
+
+    <div class="box ops-panel feedback-filter-panel">
+        <div class="ops-panel-heading">
+            <div>
+                <span class="submit-section-kicker">筛选处理</span>
+                <h2>反馈筛选</h2>
+            </div>
+            <span class="status-pill status-info">集中处理</span>
+        </div>
         <p class="notice">
             这里用于集中处理用户提交的补充、纠错、过期提醒、价格变化等反馈。
         </p>
 
-        <div class="form-row">
-            <label>关键词搜索</label>
-            <input id="feedbackKeyword" placeholder="搜索反馈内容、用户名、关联标题" onkeydown="handleFeedbackSearchKeyDown(event)">
-        </div>
+        <div class="ops-form-grid">
+            <div class="form-row">
+                <label>关键词搜索</label>
+                <input id="feedbackKeyword" placeholder="搜索反馈内容、用户名、关联标题" onkeydown="handleFeedbackSearchKeyDown(event)">
+            </div>
 
-        <div class="form-row">
-            <label>对象类型</label>
-            <select id="feedbackTargetType" onchange="renderFeedbackAdminList()">
-                <option value="all">全部</option>
-                <option value="clue">线索反馈</option>
-                <option value="verified">真实库反馈</option>
-            </select>
-        </div>
+            <div class="form-row">
+                <label>对象类型</label>
+                <select id="feedbackTargetType" onchange="renderFeedbackAdminList()">
+                    <option value="all">全部</option>
+                    <option value="clue">线索反馈</option>
+                    <option value="verified">真实库反馈</option>
+                </select>
+            </div>
 
-        <div class="form-row">
-            <label>反馈类型</label>
-            <select id="feedbackTypeFilter" onchange="renderFeedbackAdminList()">
-                <option value="all">全部类型</option>
-            </select>
+            <div class="form-row">
+                <label>反馈类型</label>
+                <select id="feedbackTypeFilter" onchange="renderFeedbackAdminList()">
+                    <option value="all">全部类型</option>
+                </select>
+            </div>
         </div>
 
         <button onclick="loadFeedbackAdminPage()">刷新反馈</button>
     </div>
 
-    <div class="section">
+    <div class="section ops-panel ops-list-panel">
         <h2>反馈统计</h2>
         <div id="feedbackStatsBox" class="empty">正在加载反馈统计...</div>
     </div>
 
-    <div class="section">
+    <div class="section ops-panel ops-list-panel">
         <h2>反馈列表</h2>
         <div id="feedbackAdminList" class="empty">正在加载反馈列表...</div>
     </div>

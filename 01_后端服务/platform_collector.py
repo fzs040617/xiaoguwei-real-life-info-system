@@ -292,6 +292,49 @@ def safe_text(value: Any, limit: int = 2000) -> str:
     return text[:limit]
 
 
+def is_meaningful_manual_value(value: Any) -> bool:
+    text = safe_text(value, 300).lower()
+    invalid_values = {"", "留空", "无", "暂无", "null", "undefined", "none", "nan", "n/a", "-"}
+    if text in invalid_values:
+        return False
+    if re.fullmatch(r"\d{1,3}", safe_text(value, 300)):
+        return False
+    return True
+
+
+def clean_manual_import_text(value: Any, limit: int = 1000) -> str:
+    text = safe_text(value, limit)
+    for _ in range(8):
+        before = text
+        text = re.sub(r"^\s*(?:来源平台)\s*[：:]\s*(?:留空|无|暂无|null|undefined|none|nan|n/a|-)?\s*", "", text, flags=re.I)
+        text = re.sub(r"^\s*(?:URL|链接|来源链接|公开 URL)\s*[：:]\s*(?:留空|无|暂无|null|undefined|none|nan|n/a|-)?\s*", "", text, flags=re.I)
+        text = re.sub(r"^\s*(?:粘贴公开文本|公开文本|摘要|正文|文本|内容)\s*[：:]\s*", "", text, flags=re.I)
+        text = re.sub(r"^\s*(?:留空|无|暂无|null|undefined|none|nan|n/a|-)\s+", "", text, flags=re.I)
+        text = re.sub(r"\s+", " ", text).strip()
+        if text == before:
+            break
+    return text[:limit]
+
+
+def normalize_manual_url(value: Any) -> str:
+    text = clean_manual_import_text(value, 1000)
+    if not is_meaningful_manual_value(text):
+        return ""
+    parsed = urlparse(text)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return parsed._replace(fragment="").geturl()
+    raise ValueError("公开 URL 必须是 http/https 链接或留空")
+
+
+def manual_title_from_summary(summary: str) -> str:
+    text = clean_manual_import_text(summary, 300)
+    if not is_meaningful_manual_value(text):
+        return ""
+    first_sentence = re.split(r"[。！？!?]", text, maxsplit=1)[0].strip()
+    candidate = first_sentence or text
+    return candidate[:30].strip()
+
+
 def raw_hash_for(item: Dict[str, Any]) -> str:
     raw = json.dumps(
         {
@@ -882,14 +925,22 @@ def preview_failure_reason(error_message: str, source_type: str) -> str:
 
 def create_manual_item(data: Dict[str, Any]) -> Dict[str, Any]:
     init_collector_db()
-    title = safe_text(data.get("title"), 300)
-    if not title:
-        raise ValueError("标题不能为空")
+    summary = clean_manual_import_text(data.get("summary"), 1000)
+    title = clean_manual_import_text(data.get("title"), 300)
+    if not is_meaningful_manual_value(title):
+        title = manual_title_from_summary(summary)
+    if not is_meaningful_manual_value(title):
+        raise ValueError("请填写标题或摘要")
 
-    platform = safe_text(data.get("platform"), 120) or "人工导入"
-    url = safe_text(data.get("url"), 1000)
-    summary = safe_text(data.get("summary"), 1000)
-    notes = safe_text(data.get("notes"), 1000)
+    platform = clean_manual_import_text(data.get("platform"), 120)
+    if not is_meaningful_manual_value(platform):
+        platform = "人工导入"
+    url = normalize_manual_url(data.get("url"))
+    notes = clean_manual_import_text(data.get("notes") or data.get("source_note"), 1000)
+    if not is_meaningful_manual_value(summary):
+        summary = ""
+    if is_meaningful_manual_value(notes):
+        summary = compact_text([summary, f"来源说明：{notes}"], 1000)
     raw_text = compact_text([summary, notes], 4000)
     fetched_at = now_text()
     item = {

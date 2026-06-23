@@ -5,7 +5,7 @@
     <title>地图中心｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body onload="loadMapPoints()">
+<body class="ops-page map-page" onload="loadMapPoints()">
 
 <div class="header">
     <div class="header-inner">
@@ -29,8 +29,22 @@
     </div>
 </div>
 
-<div class="container">
-    <div class="box">
+<div class="container ops-container">
+    <div class="page-hero ops-hero map-hero">
+        <div class="hero-kicker">生活地图工作台</div>
+        <h2>地图中心</h2>
+        <p>查看线索、地点与生活信息的空间分布，维护可追溯的地点记录和地图点状态。</p>
+        <div class="hero-badges">
+            <span class="hero-badge">地图查看</span>
+            <span class="hero-badge">地点线索</span>
+            <span class="hero-badge">空间分布</span>
+            <span class="hero-badge">人工核验</span>
+        </div>
+    </div>
+
+    <div class="ops-workbench ops-workbench-map">
+        <main class="ops-main">
+    <div class="box ops-panel map-smart-panel">
         <h2>智能识别添加地图点</h2>
         <p class="notice">
             可以直接粘贴一段“字段：内容”的信息，系统会自动识别并填入下方表单。请先检查识别结果，再点击“确认同步到系统”。
@@ -53,7 +67,7 @@
 
         <div id="mapSmartPreview" class="crawl-result-box" style="margin-top: 14px;"></div>
     </div>
-    <div class="box">
+    <div class="box ops-panel map-create-panel">
         <h2>新增地图点</h2>
         <p class="notice">
             第一版先做“地点信息管理 + 外部地图跳转”。后面可以继续接入真实地图组件，做美食地图、租房地图、citywalk 路线。
@@ -132,7 +146,9 @@
         <div id="mapMessage" class="message"></div>
     </div>
 
-    <div class="box">
+        </main>
+        <aside class="ops-aside">
+    <div class="box ops-panel">
         <h2>地图点筛选</h2>
 
         <div class="search-box">
@@ -157,8 +173,10 @@
             <button id="mapStatus全部" class="small-button filter-button" onclick="setMapStatus('全部')">全部状态</button>
         </div>
     </div>
+        </aside>
+    </div>
 
-    <div class="section">
+    <div class="section ops-panel ops-list-panel">
         <h2>地图点列表</h2>
         <div id="mapPointList" class="empty">正在加载地图点...</div>
     </div>

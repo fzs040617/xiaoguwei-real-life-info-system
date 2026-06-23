@@ -180,24 +180,31 @@
                 <strong>适合手动整理公开页面摘要、商家公开介绍、活动信息或人工确认内容。</strong>
                 <span>系统只保存你手动录入的文本，不访问外部账号环境。</span>
             </div>
-            <p class="notice">保存时不访问外部 URL，不读取账号、cookie、token 或密钥。</p>
+            <p class="notice">保存时不登录平台，不使用 cookie，不绕验证码或反爬；请不要粘贴登录后内容、隐私信息、大段评论全文或平台图片。</p>
             <div class="collector-form-grid collector-manual-grid">
                 <div class="form-row">
                     <label>来源平台</label>
-                    <input id="manualPlatform" placeholder="例如：小红书、点评、学校官网">
+                    <select id="manualPlatform">
+                        <option value="公开文本">公开文本</option>
+                        <option value="公众号公开页">公众号公开页</option>
+                        <option value="学校官网">学校官网</option>
+                        <option value="其他公开网页">其他公开网页</option>
+                        <option value="线下观察">线下观察</option>
+                        <option value="同学反馈">同学反馈</option>
+                    </select>
                 </div>
                 <div class="form-row">
                     <label>标题</label>
-                    <input id="manualTitle" placeholder="必填">
+                    <input id="manualTitle" placeholder="例如：大学城贝岗附近新开的糖水店体验">
                 </div>
                 <div class="form-row">
-                    <label>URL（可选）</label>
-                    <input id="manualUrl" placeholder="可留空，建议填写公开链接">
+                    <label>公开 URL（可选）</label>
+                    <input id="manualUrl" placeholder="https://example.com/page，可留空">
                 </div>
             </div>
             <div class="form-row">
-                <label>摘要</label>
-                <textarea id="manualSummary" placeholder="手动摘录公开内容摘要"></textarea>
+                <label>摘要 / 正文</label>
+                <textarea id="manualSummary" placeholder="粘贴或整理公开信息。请不要粘贴登录后内容、隐私信息或大段评论全文。"></textarea>
             </div>
             <div class="form-row">
                 <label>粘贴公开文本（可选，用于智能识别标题和摘要）</label>
@@ -205,12 +212,13 @@
                 <p class="field-hint">可粘贴从公开页面手动复制的文字。系统只做本地解析，不会绕过平台限制。</p>
             </div>
             <div class="form-row">
-                <label>备注</label>
-                <textarea id="manualNotes" placeholder="例如：人工导入、待复核"></textarea>
+                <label>来源说明</label>
+                <textarea id="manualNotes" placeholder="例如：用户人工整理自公开页面"></textarea>
             </div>
             <div class="collector-manual-actions">
-                <button type="button" class="btn-secondary" data-action="manual-detect">智能识别人工导入信息</button>
-                <button type="button" data-action="manual-import">保存到采集条目</button>
+                <button type="button" class="btn-secondary" data-action="manual-detect">智能识别填表</button>
+                <button type="button" data-action="manual-import">导入采集条目</button>
+                <button type="button" class="btn-secondary" data-action="manual-clear">清空</button>
             </div>
             <div id="collectorManualMessage" class="message"></div>
             <div class="collector-collapse-row">
@@ -225,7 +233,7 @@
                 <h2 id="collectorSourceTitle">采集源列表</h2>
                 <p>默认显示精简摘要，展开单项后查看完整信息、预览结果、最近运行状态和失败日志。</p>
             </div>
-            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-sources">展开</button>
+            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-sources">展开列表</button>
         </div>
         <div class="collector-panel-body">
             <div class="collector-toolbar collector-source-filter-row">

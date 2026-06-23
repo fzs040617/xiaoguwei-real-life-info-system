@@ -5,7 +5,7 @@
     <title>提交线索｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="submit-page">
 
 <div class="header">
     <div class="header-inner">
@@ -29,49 +29,106 @@
     </div>
 </div>
 
-<div class="container">
-    <div class="box">
-        <p class="notice">
-            提交后会先进入“线索库”，不会直接进入真实库。后续需要经过用户核验和管理员审核后，才会同步到真实库。
-        </p>
-
-        <div class="form-row">
-            <label>标题</label>
-            <input id="clueTitle" placeholder="例如：贝岗某家夜宵烧烤线索">
+<div class="container submit-container">
+    <div class="page-hero submit-hero">
+        <div class="hero-kicker">线索提交工作台</div>
+        <h2>提交线索</h2>
+        <p>用户投稿会先进入线索库，经过用户核验和管理员审核后，才会同步到真实库。你可以先粘贴公开文本智能填表，再人工确认字段。</p>
+        <div class="hero-badges">
+            <span class="hero-badge">用户投稿</span>
+            <span class="hero-badge">线索库暂存</span>
+            <span class="hero-badge">人工核验</span>
+            <span class="hero-badge">真实库同步</span>
         </div>
+    </div>
 
-        <div class="form-row">
-            <label>分类</label>
-            <select id="clueCategory">
-                <option value="探店">探店</option>
-                <option value="租房">租房</option>
-                <option value="地图">地图</option>
-                <option value="路线">路线</option>
-                <option value="生活服务">生活服务</option>
-                <option value="避坑纠错">避坑纠错</option>
-                <option value="外部线索">外部线索</option>
-            </select>
-        </div>
+    <div class="submit-workbench">
+        <main class="submit-primary">
+            <div class="box submit-form-panel">
+                <div class="submit-panel-heading">
+                    <div>
+                        <span class="submit-section-kicker">表单确认</span>
+                        <h2>确认线索字段</h2>
+                    </div>
+                    <span class="status-pill">待提交</span>
+                </div>
 
-        <div class="form-row">
-            <label>来源平台</label>
-            <input id="cluePlatform" placeholder="例如：用户投稿、小红书、公众号、公开网页">
-        </div>
+                <p class="notice submit-notice">
+                    提交后会先进入“线索库”，不会直接进入真实库。请尽量填写标题、来源和简介，方便后续核验。
+                </p>
 
-        <div class="form-row">
-            <label>来源链接</label>
-            <input id="clueUrl" placeholder="可以为空，例如：https://example.com">
-        </div>
+                <div class="submit-form-grid">
+                    <div class="form-row submit-form-row submit-form-row-wide">
+                        <label>标题</label>
+                        <input id="clueTitle" placeholder="例如：贝岗某家夜宵烧烤线索">
+                    </div>
 
-        <div class="form-row">
-            <label>线索简介</label>
-            <textarea id="clueSummary" placeholder="请描述这条线索的内容、位置、价格、体验、是否待核验等"></textarea>
-        </div>
+                    <div class="form-row submit-form-row">
+                        <label>分类</label>
+                        <select id="clueCategory">
+                            <option value="探店">探店</option>
+                            <option value="租房">租房</option>
+                            <option value="地图">地图</option>
+                            <option value="路线">路线</option>
+                            <option value="生活服务">生活服务</option>
+                            <option value="避坑纠错">避坑纠错</option>
+                            <option value="外部线索">外部线索</option>
+                        </select>
+                    </div>
 
-        <button onclick="submitClue()">提交线索</button>
-        <button style="margin-left: 8px;" onclick="location.href='index.html'">首页</button>
+                    <div class="form-row submit-form-row">
+                        <label>来源平台</label>
+                        <input id="cluePlatform" placeholder="例如：用户投稿、小红书、公众号、公开网页">
+                    </div>
 
-        <div id="submitMessage" class="message"></div>
+                    <div class="form-row submit-form-row submit-form-row-wide">
+                        <label>来源链接</label>
+                        <input id="clueUrl" placeholder="可以为空，例如：https://example.com">
+                    </div>
+
+                    <div class="form-row submit-form-row submit-form-row-wide">
+                        <label>线索简介</label>
+                        <textarea id="clueSummary" placeholder="请描述这条线索的内容、位置、价格、体验、是否待核验等"></textarea>
+                    </div>
+                </div>
+
+                <div class="submit-actions">
+                    <button onclick="submitClue()">确认同步到系统</button>
+                    <button class="btn-secondary" onclick="location.href='index.html'">返回首页</button>
+                </div>
+
+                <div id="submitMessage" class="message submit-message"></div>
+            </div>
+        </main>
+
+        <aside class="submit-aside">
+            <div class="submit-side-card">
+                <h2>提交流程</h2>
+                <div class="submit-flow">
+                    <div class="submit-flow-step">
+                        <strong>1. 智能识别</strong>
+                        <span>粘贴公开文本，自动拆分标题、平台、链接和简介。</span>
+                    </div>
+                    <div class="submit-flow-step">
+                        <strong>2. 人工确认</strong>
+                        <span>核对表单字段，删除无关标签和无效链接。</span>
+                    </div>
+                    <div class="submit-flow-step">
+                        <strong>3. 进入线索库</strong>
+                        <span>提交后等待用户反馈与管理员审核。</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="submit-side-card submit-compliance-card">
+                <h2>提交边界</h2>
+                <ul>
+                    <li>不要提交隐私信息、账号、手机号或登录后内容。</li>
+                    <li>公开 URL 可留空；有链接时请使用 http/https。</li>
+                    <li>不确定的信息请在简介中标注“待核验”。</li>
+                </ul>
+            </div>
+        </aside>
     </div>
 </div>
 

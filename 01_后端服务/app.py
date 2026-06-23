@@ -266,10 +266,11 @@ class CollectorSourceDetectRequest(BaseModel):
 class CollectorManualItemCreate(BaseModel):
     token: str = ""
     platform: Optional[str] = ""
-    title: str
+    title: Optional[str] = ""
     url: Optional[str] = ""
     summary: Optional[str] = ""
     notes: Optional[str] = ""
+    source_note: Optional[str] = ""
 
 
 class CollectorManualItemDetectRequest(BaseModel):
@@ -577,16 +578,18 @@ def create_manual_collector_item(
 ):
     require_admin_token(db, request.token)
 
-    if not request.title.strip():
-        raise HTTPException(status_code=400, detail="标题不能为空")
-
     try:
         item = collector_create_manual_item(request.dict(exclude={"token"}))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
     return {
-        "message": "人工导入公开信息已保存到采集条目",
+        "message": "已导入采集条目，等待审核",
+        "id": item.get("id"),
+        "status": item.get("status"),
+        "title": item.get("title"),
+        "platform": item.get("platform"),
+        "url": item.get("url"),
         "data": item
     }
 

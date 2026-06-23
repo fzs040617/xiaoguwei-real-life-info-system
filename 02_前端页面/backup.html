@@ -5,7 +5,7 @@
     <title>备份｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="xgw-backup-page" onload="loadBackupPreview()">
+<body class="xgw-backup-page ops-page backup-page" onload="loadBackupPreview()">
 
 <div class="header">
     <div class="header-inner">
@@ -29,29 +29,49 @@
     </div>
 </div>
 
-<div class="container">
+<div class="container ops-container">
 
-    <div class="box">
-        <h2>系统备份说明</h2>
+    <div class="page-hero ops-hero backup-hero">
+        <div class="hero-kicker">备份与恢复工作台</div>
+        <h2>备份</h2>
+        <p>导出、导入和恢复系统数据，保护项目安全；恢复类操作请先核对文件来源和风险提示。</p>
+        <div class="hero-badges">
+            <span class="hero-badge">数据备份</span>
+            <span class="hero-badge">恢复导入</span>
+            <span class="hero-badge">风险确认</span>
+            <span class="hero-badge">管理员操作</span>
+        </div>
+    </div>
+
+    <div class="box ops-panel backup-intro-panel">
+        <div class="ops-panel-heading">
+            <div>
+                <span class="submit-section-kicker">备份说明</span>
+                <h2>系统备份说明</h2>
+            </div>
+            <span class="status-pill status-warning">高风险入口</span>
+        </div>
         <p class="notice">
             备份导出会把线索、真实库、采集目标、反馈、地图点、路线、更新历史全部导出为一个 JSON 文件。
             这个操作不会修改系统数据，也不会清空任何内容。
         </p>
 
-        <button onclick="downloadBackupJson()">导出完整 JSON 备份</button>
-        <button style="margin-left:8px;" onclick="loadBackupPreview()">刷新备份预览</button>
+        <div class="ops-action-row">
+            <button onclick="downloadBackupJson()">导出完整 JSON 备份</button>
+            <button class="btn-secondary" onclick="loadBackupPreview()">刷新备份预览</button>
+        </div>
 
         <div id="backupMessage" class="message"></div>
     </div>
 
-    <div id="backupImportMount"></div>
+    <div id="backupImportMount" class="ops-dynamic-mount"></div>
 
-    <div class="section">
+    <div class="section ops-panel ops-list-panel">
         <h2>备份数据预览</h2>
         <div id="backupPreview" class="empty">正在加载备份预览...</div>
     </div>
 
-    <div class="section">
+    <div class="section ops-panel ops-list-panel">
         <h2>最近一次导出内容结构</h2>
         <div id="backupStructure" class="empty">暂无导出结构。</div>
     </div>

@@ -40,7 +40,11 @@ window.parseGenericSmartText = function () {
 
         fillGenericFormFixed(pageType, data);
 
-        genericFixProgress(80, "已填入表单");
+        const completionMessage = getGenericSmartCompletionMessageFixed(data);
+        const hasWarning = Boolean(data && data.warnings && data.warnings.length > 0);
+        showGenericSmartPageMessageFixed(pageType, completionMessage, hasWarning);
+
+        genericFixProgress(80, completionMessage);
 
         const preview = document.getElementById("genericSmartPreview");
         if (preview) {
@@ -54,7 +58,7 @@ window.parseGenericSmartText = function () {
             btn.style.display = "inline-block";
         }
 
-        genericFixProgress(100, "通用智能识别完成");
+        genericFixProgress(100, completionMessage);
     } catch (error) {
         genericFixProgress(100, "通用智能识别报错：" + error.message);
         alert("智能识别报错：\n" + error.message);
@@ -85,8 +89,217 @@ function detectGenericPageTypeFixed() {
     return "";
 }
 
+function parseStructuredSubmitClueTextFixed(text) {
+    const raw = String(text || "").replace(/\r/g, "\n").trim();
+    const data = {
+        title: "",
+        category: "",
+        source: "",
+        url: "",
+        summary: "",
+        sourceNote: "",
+        confidence: "高",
+        inferred: [],
+        warnings: []
+    };
+
+    if (!raw) {
+        return null;
+    }
+
+    const fields = {
+        title: [],
+        category: [],
+        source: [],
+        url: [],
+        summary: [],
+        sourceNote: []
+    };
+    const labelPattern = /(?:^|\n|\s)(来源平台|平台|公开\s*URL|公开URL|URL|链接|来源链接|标题|分类|类别|摘要|正文|内容|线索简介|简介|来源说明|说明|备注)\s*[:：]\s*/gi;
+    const matches = Array.from(raw.matchAll(labelPattern));
+
+    if (!matches.length) {
+        return null;
+    }
+
+    matches.forEach((match, index) => {
+        const field = normalizeStructuredSubmitClueLabelFixed(match[1]);
+        if (!field) {
+            return;
+        }
+        const start = match.index + match[0].length;
+        const end = index + 1 < matches.length ? matches[index + 1].index : raw.length;
+        const value = cleanSubmitClueFieldValueFixed(raw.slice(start, end));
+        if (value) {
+            fields[field].push(value);
+        }
+    });
+
+    const rawTitle = cleanSubmitClueFieldValueFixed(fields.title.join("\n"));
+    const rawCategory = cleanSubmitClueFieldValueFixed(fields.category.join("\n"));
+    const rawSource = cleanSubmitClueFieldValueFixed(fields.source.join("\n"));
+    const rawSummary = cleanSubmitClueSummaryFixed(fields.summary.join("\n"));
+    const rawSourceNote = cleanSubmitClueFieldValueFixed(fields.sourceNote.join("\n"));
+    const urlResult = normalizeSubmitClueUrlFixed(fields.url.join("\n"));
+
+    data.summary = isMeaningfulSubmitClueValueFixed(rawSummary) ? rawSummary : "";
+    data.title = isMeaningfulSubmitClueValueFixed(rawTitle) ? rawTitle : "";
+    data.category = isMeaningfulSubmitClueValueFixed(rawCategory) ? rawCategory : "";
+    data.source = isMeaningfulSubmitClueValueFixed(rawSource) ? rawSource : "";
+    data.url = urlResult.url;
+    data.sourceNote = isMeaningfulSubmitClueValueFixed(rawSourceNote) ? rawSourceNote : "";
+
+    if (!data.title && data.summary) {
+        data.title = guessSubmitClueTitleFixed(data.summary, 30);
+        data.inferred.push("线索标题");
+    }
+
+    if (!data.category) {
+        data.category = "外部线索";
+        data.inferred.push("分类");
+    }
+
+    if (!data.source) {
+        data.source = "用户投稿";
+        data.inferred.push("来源平台");
+    }
+
+    if (!data.summary) {
+        data.warnings.push("未识别到明确字段，请手动填写标题或简介。");
+    }
+
+    if (!data.title) {
+        data.title = "未命名线索";
+        data.inferred.push("线索标题");
+    }
+
+    if (urlResult.invalid) {
+        data.warnings.push("识别到的 URL 不是 http/https，已忽略来源链接。");
+    }
+
+    data.confidence = getConfidenceFixed(data);
+    return data;
+}
+
+function normalizeStructuredSubmitClueLabelFixed(label) {
+    const normalized = String(label || "").replace(/\s+/g, "").toUpperCase();
+    const map = {
+        "来源平台": "source",
+        "平台": "source",
+        "公开URL": "url",
+        "URL": "url",
+        "链接": "url",
+        "来源链接": "url",
+        "标题": "title",
+        "分类": "category",
+        "类别": "category",
+        "摘要": "summary",
+        "正文": "summary",
+        "内容": "summary",
+        "线索简介": "summary",
+        "简介": "summary",
+        "来源说明": "sourceNote",
+        "说明": "sourceNote",
+        "备注": "sourceNote"
+    };
+
+    return map[normalized] || "";
+}
+
+function cleanSubmitClueFieldValueFixed(value) {
+    return String(value || "")
+        .replace(/\r/g, "\n")
+        .replace(/\u00a0/g, " ")
+        .replace(/[ \t]+\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+}
+
+function cleanSubmitClueSummaryFixed(value) {
+    let text = cleanSubmitClueFieldValueFixed(value);
+    const labelPattern = /^(来源平台|平台|公开\s*URL|公开URL|URL|链接|来源链接|标题|分类|类别|摘要|正文|内容|线索简介|简介|来源说明|说明|备注)\s*[:：]\s*/i;
+    while (labelPattern.test(text)) {
+        text = text.replace(labelPattern, "").trim();
+    }
+    return text;
+}
+
+function isMeaningfulSubmitClueValueFixed(value) {
+    const text = String(value || "").trim();
+    if (!text) return false;
+
+    const lowered = text.toLowerCase();
+    const invalidValues = new Set([
+        "留空",
+        "无",
+        "暂无",
+        "null",
+        "undefined",
+        "none",
+        "nan",
+        "n/a",
+        "-"
+    ]);
+
+    if (invalidValues.has(lowered)) return false;
+    if (/^\d{1,3}$/.test(text)) return false;
+
+    return true;
+}
+
+function normalizeSubmitClueUrlFixed(value) {
+    const text = cleanSubmitClueFieldValueFixed(value).split(/\s+/)[0] || "";
+    if (!isMeaningfulSubmitClueValueFixed(text)) {
+        return {url: "", invalid: false};
+    }
+
+    try {
+        const url = new URL(text);
+        if (url.protocol === "http:" || url.protocol === "https:") {
+            return {url: text, invalid: false};
+        }
+    } catch (error) {
+        // Fall through to invalid URL handling.
+    }
+
+    return {url: "", invalid: true};
+}
+
+function guessSubmitClueTitleFixed(text, maxLength) {
+    const normalized = cleanSubmitClueFieldValueFixed(text).replace(/\s+/g, " ");
+    const firstSentence = normalized.split(/[。！？!?；;\n]/).find(Boolean) || normalized;
+    if (firstSentence.length <= maxLength) return firstSentence;
+    return firstSentence.slice(0, maxLength);
+}
+
+function getGenericSmartCompletionMessageFixed(data) {
+    const warnings = data && data.warnings ? data.warnings : [];
+    const urlWarning = "识别到的 URL 不是 http/https，已忽略来源链接。";
+    const emptyWarning = "未识别到明确字段，请手动填写标题或简介。";
+    if (warnings.includes(urlWarning)) {
+        return urlWarning;
+    }
+    if (warnings.includes(emptyWarning)) {
+        return emptyWarning;
+    }
+    return "已识别并填入字段，请核对后提交。";
+}
+
+function showGenericSmartPageMessageFixed(pageType, message, isError = false) {
+    if (pageType !== "clue") return;
+    const box = document.getElementById("submitMessage");
+    if (!box) return;
+    box.innerText = message || "";
+    box.classList.toggle("user-admin-message-error", Boolean(isError));
+}
+
 function parseClueTextFixed(text) {
     const raw = String(text || "").trim();
+    const structured = parseStructuredSubmitClueTextFixed(raw);
+    if (structured) {
+        return structured;
+    }
+
     let working = normalizeGenericTextFixed(raw);
 
     const data = {

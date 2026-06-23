@@ -5,7 +5,7 @@
     <title>路线中心｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body onload="loadRoutePage()">
+<body class="ops-page route-page" onload="loadRoutePage()">
 
 <div class="header">
     <div class="header-inner">
@@ -29,9 +29,23 @@
     </div>
 </div>
 
-<div class="container">
+<div class="container ops-container">
 
-    <div class="box">
+    <div class="page-hero ops-hero route-hero">
+        <div class="hero-kicker">路线信息工作台</div>
+        <h2>路线中心</h2>
+        <p>查看和维护路线、站点、路径相关信息，把生活地点串联成可核验、可复用的校园动线。</p>
+        <div class="hero-badges">
+            <span class="hero-badge">路线信息</span>
+            <span class="hero-badge">路径规划</span>
+            <span class="hero-badge">生活动线</span>
+            <span class="hero-badge">人工维护</span>
+        </div>
+    </div>
+
+    <div class="ops-workbench ops-workbench-route">
+        <main class="ops-main">
+    <div class="box ops-panel route-create-panel">
         <h2>新建路线</h2>
         <p class="notice">
             可以先在下面“可选地图点”中点击“加入路线草稿”，也可以手动填写地图点 ID，例如：1,2,3。
@@ -93,7 +107,7 @@
         <div id="routeMessage" class="message"></div>
     </div>
 
-    <div class="box">
+    <div class="box ops-panel">
         <h2>可选地图点</h2>
         <p class="notice">
             这里显示正常状态的地图点。点击“加入路线草稿”后，会自动加入上方地图点 ID 输入框。
@@ -107,7 +121,9 @@
         <div id="selectableMapPointList" class="empty">正在加载地图点...</div>
     </div>
 
-    <div class="box">
+        </main>
+        <aside class="ops-aside">
+    <div class="box ops-panel">
         <h2>路线筛选</h2>
 
         <div class="search-box">
@@ -130,8 +146,10 @@
             <button id="routeStatus全部" class="small-button filter-button" onclick="setRouteStatus('全部')">全部状态</button>
         </div>
     </div>
+        </aside>
+    </div>
 
-    <div class="section">
+    <div class="section ops-panel ops-list-panel">
         <h2>路线列表</h2>
         <div id="routeList" class="empty">正在加载路线...</div>
     </div>

@@ -5,7 +5,7 @@
     <title>数据管理中心｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body onload="loadManageData()">
+<body class="ops-page manage-page" onload="loadManageData()">
 
 <div class="header">
     <div class="header-inner">
@@ -29,17 +29,35 @@
     </div>
 </div>
 
-<div class="container">
+<div class="container ops-container">
 
-    <div class="box">
-        <h2>管理说明</h2>
+    <div class="page-hero ops-hero manage-hero">
+        <div class="hero-kicker">数据管理工作台</div>
+        <h2>数据管理</h2>
+        <p>管理线索、真实库、分类、来源等结构化数据，集中处理维护、编辑和清理操作。</p>
+        <div class="hero-badges">
+            <span class="hero-badge">数据维护</span>
+            <span class="hero-badge">线索治理</span>
+            <span class="hero-badge">真实库</span>
+            <span class="hero-badge">管理员操作</span>
+        </div>
+    </div>
+
+    <div class="box ops-panel manage-intro-panel">
+        <div class="ops-panel-heading">
+            <div>
+                <span class="submit-section-kicker">管理说明</span>
+                <h2>数据维护入口</h2>
+            </div>
+            <span class="status-pill status-warning">谨慎操作</span>
+        </div>
         <p class="notice">
             这里用于快速清理测试数据、修改标题、分类、简介等内容。删除是真删除，测试时只删确定不要的数据。
         </p>
         <button id="manageRefreshButton" type="button" onclick="refreshManageData(this)">刷新数据</button>
     </div>
 
-    <div id="manage-section-verified" class="section manage-collapsible-section">
+    <div id="manage-section-verified" class="section manage-collapsible-section ops-panel ops-list-panel">
         <div class="manage-section-header">
             <h2>真实库数据</h2>
             <button type="button" class="small-button" data-action="toggle-manage-section" data-target="manage-section-verified">收起</button>
@@ -49,7 +67,7 @@
         </div>
     </div>
 
-    <div id="manage-section-clues" class="section manage-collapsible-section">
+    <div id="manage-section-clues" class="section manage-collapsible-section ops-panel ops-list-panel">
         <div class="manage-section-header">
             <h2>线索库数据</h2>
             <button type="button" class="small-button" data-action="toggle-manage-section" data-target="manage-section-clues">收起</button>
