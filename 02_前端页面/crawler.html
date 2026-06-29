@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -70,20 +70,28 @@
         </div>
     </div>
 
+    <nav class="collector-module-tabs" aria-label="采集管理二级模块">
+        <button type="button" class="collector-module-tab" data-collector-tab="source-create">新增数据源</button>
+        <button type="button" class="collector-module-tab" data-collector-tab="daily-authorized">授权每日更新</button>
+        <button type="button" class="collector-module-tab" data-collector-tab="source-list">采集源列表</button>
+        <button type="button" class="collector-module-tab" data-collector-tab="manual-import">人工 / 批量导入</button>
+        <button type="button" class="collector-module-tab" data-collector-tab="items">采集条目</button>
+        <button type="button" class="collector-module-tab" data-collector-tab="runs">运行日志</button>
+    </nav>
+
     <div class="collector-workbench">
         <main class="collector-workbench-main">
-    <div id="collector-section-create" class="box collector-panel" data-section-id="create">
+    <div id="collector-section-create" class="box collector-panel collector-module-panel" data-section-id="create" data-collector-module="source-create">
         <div class="collector-panel-header">
             <div>
                 <h2>新增采集源</h2>
-                <p>这里用于添加 RSS / JSON API / HTML 页面采集源，需要填写 URL。</p>
+                <p>这里用于添加公开 RSS / JSON API / HTML 页面，或合法授权 CSV / JSON 数据源。</p>
             </div>
-            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-create">收起</button>
         </div>
         <div class="collector-panel-body">
             <div class="collector-config-steps" aria-label="采集源配置步骤">
-                <div class="collector-config-step"><span>1</span><strong>填来源</strong><em>名称、平台、URL</em></div>
-                <div class="collector-config-step"><span>2</span><strong>设规则</strong><em>类型、启用、关键词</em></div>
+                <div class="collector-config-step"><span>1</span><strong>填来源</strong><em>名称、平台、地址</em></div>
+                <div class="collector-config-step"><span>2</span><strong>设规则</strong><em>类型、启用、授权说明</em></div>
                 <div class="collector-config-step"><span>3</span><strong>保存到采集篮</strong><em>等待预览和审核</em></div>
             </div>
             <p class="notice">
@@ -91,24 +99,60 @@
                 不要填写平台账号、cookie、token、密钥。
             </p>
             <p class="notice">
-                美团、大众点评、小红书等平台通常涉及登录、动态渲染、风控或官方授权接口。本系统第一阶段不绕过登录、验证码、反爬，也不使用账号 cookie。若要接入此类平台，应使用官方开放平台、合作授权 API，或通过人工导入公开链接/文本的方式进入审核流程。
+                系统支持每天自动接入合法授权数据源。小红书、美团、大众点评等平台数据必须来自官方授权、商家授权导出或合法数据服务商；系统不会绕过登录、验证码或反爬。
             </p>
+
+            <div class="collector-source-config-card">
+                <div class="collector-source-config-header">
+                    <div>
+                        <h3>粘贴采集源配置</h3>
+                        <p>可粘贴名称、平台类型、数据源类型、数据地址、授权说明等信息，系统会自动填入下方表单。</p>
+                    </div>
+                    <span>智能识别</span>
+                </div>
+                <textarea id="collectorSourceConfigText" placeholder="例如：
+名称：小红书授权数据本地目录测试
+平台类型：小红书授权数据
+数据源类型：本地目录 CSV / JSON
+数据地址：C:\Users\Sean\Desktop\authorized_data\xhs
+授权说明：测试用授权数据目录，文件由用户合法提供
+状态：启用"></textarea>
+                <div class="collector-source-config-actions">
+                    <button type="button" onclick="detectCollectorSource(this)">智能识别采集源配置</button>
+                    <button type="button" class="btn-secondary" onclick="clearCollectorSourceConfigText()">清空配置</button>
+                </div>
+                <div id="collectorSourceConfigStatus" class="message collector-source-config-status"></div>
+            </div>
 
             <div class="collector-form-grid">
                 <div class="form-row">
                     <label>名称</label>
-                    <input id="collectorName" placeholder="例如：大学城公开资讯 RSS">
+                    <input id="collectorName" placeholder="例如：小红书授权数据本地目录测试">
                 </div>
                 <div class="form-row">
-                    <label>平台</label>
-                    <input id="collectorPlatform" placeholder="例如：公开网站、学校公告、RSS">
+                    <label>平台类型</label>
+                    <input id="collectorPlatform" list="collectorPlatformOptions" placeholder="例如：小红书授权数据、美团授权数据、学校官网">
+                    <datalist id="collectorPlatformOptions">
+                        <option value="小红书授权数据"></option>
+                        <option value="美团授权数据"></option>
+                        <option value="大众点评授权数据"></option>
+                        <option value="学校官网"></option>
+                        <option value="政务公开"></option>
+                        <option value="公众号公开页"></option>
+                        <option value="其他授权数据源"></option>
+                        <option value="其他公开网页"></option>
+                    </datalist>
                 </div>
                 <div class="form-row">
-                    <label>类型</label>
+                    <label>数据源类型</label>
                     <select id="collectorType">
                         <option value="rss">rss / atom</option>
                         <option value="api">公开 JSON API</option>
                         <option value="public_html">公开 HTML 列表页</option>
+                        <option value="local_folder">本地目录 CSV / JSON</option>
+                        <option value="data_package_url">授权数据包 URL</option>
+                        <option value="authorized_api">授权 API（预留）</option>
+                        <option value="data_provider">合法数据服务商（预留）</option>
                     </select>
                 </div>
                 <div class="form-row">
@@ -121,10 +165,10 @@
             </div>
 
             <div class="form-row">
-                <label>URL</label>
+                <label>数据地址</label>
                 <div class="collector-url-row">
-                    <input id="collectorUrl" placeholder="仅填写公开可访问的 RSS、JSON API 或 HTML 列表页 URL">
-                    <button type="button" onclick="detectCollectorSource()">智能识别</button>
+                    <input id="collectorUrl" placeholder="公开 URL、授权数据包 URL，或本地目录路径，例如 C:\Users\Sean\Desktop\authorized_data\xhs">
+                    <button type="button" onclick="detectCollectorSource(this)">智能识别</button>
                 </div>
                 <div id="collectorDetectMessage" class="message collector-detect-message"></div>
             </div>
@@ -135,45 +179,68 @@
             </div>
 
             <div class="form-row">
-                <label>备注</label>
-                <textarea id="collectorNotes" placeholder="说明来源用途、公开性和人工确认情况"></textarea>
+                <label>授权说明 / 备注</label>
+                <textarea id="collectorNotes" placeholder="例如：测试用授权数据目录，文件由用户合法提供。不要填写 token、cookie 或密钥。"></textarea>
             </div>
 
             <div class="collector-form-actions">
-                <button onclick="submitCollectorSource()">新增采集源</button>
-                <button class="btn-secondary" onclick="runAllCollectorSources()">运行全部启用源</button>
+                <button onclick="submitCollectorSource(this)">新增采集源</button>
+                <button class="btn-secondary" onclick="runAllCollectorSources(this)">运行全部公开源</button>
+                <button class="btn-secondary" onclick="runDailyAuthorizedSources(this)">运行今日授权数据更新</button>
             </div>
 
             <div id="collectorMessage" class="message"></div>
-            <div class="collector-collapse-row">
-                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-create">收起本区</button>
+        </div>
+    </div>
+
+    <div id="collector-section-daily" class="section collector-panel collector-module-panel" data-section-id="daily" data-collector-module="daily-authorized">
+        <div class="collector-panel-header">
+            <div>
+                <h2>授权每日更新</h2>
+                <p>仅运行已经配置好的合法授权数据源，本入口不会抓取平台站点、不会使用 cookie、token 或账号环境。</p>
+            </div>
+        </div>
+        <div class="collector-panel-body">
+            <div class="collector-daily-grid">
+                <div class="collector-daily-primary">
+                    <p class="notice">适用于官方授权、商家后台导出、合法数据服务商或本地授权 CSV / JSON 目录。运行后新增条目会进入采集条目列表，仍需人工审核后再流转。</p>
+                    <div class="collector-form-actions">
+                        <button type="button" onclick="runDailyAuthorizedSources(this)">运行今日授权数据更新</button>
+                        <button type="button" class="btn-secondary" data-action="view-all-runs">查看最近运行结果</button>
+                    </div>
+                    <div id="collectorDailyMessage" class="message"></div>
+                </div>
+                <div class="collector-daily-tips">
+                    <strong>授权源提示</strong>
+                    <ul>
+                        <li>不直接请求小红书、美团、大众点评等平台页面。</li>
+                        <li>不填写真实 token、cookie、密钥或账号密码。</li>
+                        <li>数据包 URL 只接受 http/https，内容应为授权 CSV / JSON 数据包。</li>
+                        <li>本地目录源只读取用户合法提供的 CSV / JSON 文件。</li>
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="collector-section-templates" class="section collector-panel" data-section-id="templates">
+    <div id="collector-section-templates" class="section collector-panel collector-module-panel" data-section-id="templates" data-collector-module="source-create">
         <div class="collector-panel-header">
             <div>
                 <h2>推荐公开源模板</h2>
                 <p>点击模板只会填入上方采集源表单，不会自动新增。</p>
             </div>
-            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-templates">收起</button>
         </div>
         <div class="collector-panel-body">
             <div id="collectorTemplateList" class="collector-template-list"></div>
-            <div class="collector-collapse-row">
-                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-templates">收起本区</button>
-            </div>
         </div>
     </div>
 
-    <div id="collector-section-manual" class="section collector-panel collector-manual-section" data-section-id="manual">
+    <div id="collector-section-manual" class="section collector-panel collector-manual-section collector-module-panel" data-section-id="manual" data-collector-module="manual-import">
         <div class="collector-panel-header">
             <div>
                 <h2>人工导入公开信息（不抓取平台，仅手动保存内容）</h2>
                 <p>这里不是新增采集源。用于手动摘录已经公开可见的信息。</p>
             </div>
-            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-manual">收起</button>
         </div>
         <div class="collector-panel-body">
             <div class="manual-workbench-intro">
@@ -221,19 +288,15 @@
                 <button type="button" class="btn-secondary" data-action="manual-clear">清空</button>
             </div>
             <div id="collectorManualMessage" class="message"></div>
-            <div class="collector-collapse-row">
-                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-manual">收起本区</button>
-            </div>
         </div>
     </div>
 
-    <div id="collector-section-sources" class="section collector-panel collector-section-collapsed" data-section-id="sources">
+    <div id="collector-section-sources" class="section collector-panel collector-module-panel" data-section-id="sources" data-collector-module="source-list">
         <div class="collector-panel-header">
             <div>
                 <h2 id="collectorSourceTitle">采集源列表</h2>
-                <p>默认显示精简摘要，展开单项后查看完整信息、预览结果、最近运行状态和失败日志。</p>
+                <p>默认显示精简摘要，展开单项卡片后查看完整信息、预览结果、最近运行状态和失败日志。</p>
             </div>
-            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-sources">展开列表</button>
         </div>
         <div class="collector-panel-body">
             <div class="collector-toolbar collector-source-filter-row">
@@ -255,6 +318,10 @@
                     <option value="rss">RSS</option>
                     <option value="public_html">public_html</option>
                     <option value="api">json_api / api</option>
+                    <option value="local_folder">本地目录 CSV / JSON</option>
+                    <option value="data_package_url">授权数据包 URL</option>
+                    <option value="authorized_api">授权 API（预留）</option>
+                    <option value="data_provider">合法数据服务商（预留）</option>
                 </select>
                 <button type="button" class="small-button" data-action="filter-sources">筛选</button>
                 <button type="button" class="small-button warn-button" data-action="problem-sources">只看异常源</button>
@@ -265,36 +332,28 @@
             </div>
             <div id="collectorSourceFilterSummary" class="collector-source-filter-summary">显示全部采集源</div>
             <div id="collectorSourceList" class="empty">正在加载采集源...</div>
-            <div class="collector-collapse-row">
-                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-sources">收起本区</button>
-            </div>
         </div>
     </div>
 
-    <div id="collector-section-preview" class="section collector-panel" data-section-id="preview">
+    <div id="collector-section-preview" class="section collector-panel collector-module-panel" data-section-id="preview" data-collector-module="source-list">
         <div class="collector-panel-header">
             <div>
                 <h2>预览抓取结果</h2>
                 <p>预览结果优先显示在对应采集源卡片下方，这里保留为辅助状态。</p>
             </div>
-            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-preview">收起</button>
         </div>
         <div class="collector-panel-body">
             <div id="collectorPreviewBox" class="empty">点击采集源旁的“预览”按钮后，这里会显示预览状态；预览不会写入数据库。</div>
-            <div class="collector-collapse-row">
-                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-preview">收起本区</button>
-            </div>
         </div>
     </div>
 
-    <div id="collector-section-items" class="section collector-panel collector-section-collapsed" data-section-id="items">
+    <div id="collector-section-items" class="section collector-panel collector-module-panel" data-section-id="items" data-collector-module="items">
         <div class="collector-panel-header">
             <div>
                 <h2 id="collectorItemTitle">采集条目列表</h2>
-                <p>展开后查看采集条目并筛选。</p>
+                <p>进入本模块后直接查看采集条目并筛选。</p>
                 <p>采集条目可转入线索库等待审核，也可标记忽略。</p>
             </div>
-            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-items">展开</button>
         </div>
         <div class="collector-panel-body">
             <div class="collector-toolbar">
@@ -314,25 +373,18 @@
             </div>
             <div id="collectorItemFilterSummary" class="collector-item-filter-summary">当前显示全部采集条目</div>
             <div id="collectorItemList" class="empty">正在加载采集条目...</div>
-            <div class="collector-collapse-row">
-                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-items">收起本区</button>
-            </div>
         </div>
     </div>
 
-    <div id="collector-section-runs" class="section collector-panel collector-section-collapsed" data-section-id="runs">
+    <div id="collector-section-runs" class="section collector-panel collector-module-panel" data-section-id="runs" data-collector-module="runs">
         <div class="collector-panel-header">
             <div>
                 <h2 id="collectorRunTitle">运行日志</h2>
-                <p>展开后查看最近运行记录，也可从采集源卡片按源查看。</p>
+                <p>进入本模块后直接查看最近运行记录，也可从采集源卡片按源查看。</p>
             </div>
-            <button type="button" class="small-button" data-action="toggle-section" data-target="collector-section-runs">展开</button>
         </div>
         <div class="collector-panel-body">
             <div id="collectorRunList" class="empty">正在加载运行日志...</div>
-            <div class="collector-collapse-row">
-                <button type="button" class="collector-collapse-floating" data-action="collapse-section" data-target="collector-section-runs">收起本区</button>
-            </div>
         </div>
     </div>
         </main>
@@ -351,11 +403,11 @@
 
             <div class="workbench-aside-card">
                 <div class="aside-card-kicker">合规边界</div>
-                <h3>只处理可公开访问内容</h3>
+                <h3>只处理公开或授权内容</h3>
                 <ul class="aside-checklist">
                     <li>不登录平台，不使用 cookie。</li>
                     <li>不绕验证码，不绕反爬。</li>
-                    <li>不抓付费、私密、受限内容。</li>
+                    <li>平台数据只接入官方授权、商家导出或合法服务商数据包。</li>
                     <li>采集结果人工审核后再入库。</li>
                 </ul>
             </div>
@@ -374,7 +426,7 @@
             <div class="workbench-aside-card muted">
                 <div class="aside-card-kicker">下一阶段</div>
                 <h3>合法公开 URL 采集 MVP</h3>
-                <p>后续可在当前工作台基础上扩展批量 URL 导入、失败行提示、重复链接识别和人工审核流。</p>
+                <p>后续可在当前工作台基础上扩展授权 API、合法数据服务商接口、失败行下载和自动调度可视化。</p>
             </div>
         </aside>
     </div>
@@ -382,6 +434,6 @@
 
 <script src="app.js?v=9"></script>
 <script src="crawler-collector.js?v=20260616-source-health"></script>
-<script src="global-loader.js?v=61"></script>
+<script src="global-loader.js?v=62"></script>
 </body>
 </html>

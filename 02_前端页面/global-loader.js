@@ -4,7 +4,9 @@
 // 新增全局功能时，只改这个文件，不再逐个修改全部 HTML。
 
 (function () {
-    const GLOBAL_SCRIPT_VERSION = "61";
+    const GLOBAL_SCRIPT_VERSION = "62";
+
+    forceInitialPageTop();
 
     const globalScripts = [
         "page-scope-cleanup.js",
@@ -39,5 +41,35 @@
         script.defer = false;
 
         document.body.appendChild(script);
+    }
+
+    function forceInitialPageTop() {
+        if ("scrollRestoration" in history) {
+            history.scrollRestoration = "manual";
+        }
+
+        if (window.location.hash) {
+            return;
+        }
+
+        const scrollTop = () => {
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            if (document.body) {
+                document.body.scrollTop = 0;
+            }
+        };
+
+        scrollTop();
+        window.addEventListener("DOMContentLoaded", scrollTop, {once: true});
+        window.addEventListener("load", () => {
+            scrollTop();
+            window.setTimeout(scrollTop, 0);
+        }, {once: true});
+        window.addEventListener("pageshow", event => {
+            if (event.persisted) {
+                scrollTop();
+            }
+        });
     }
 })();

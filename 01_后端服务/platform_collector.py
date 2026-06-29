@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import csv
+import io
 import json
 import re
 import sqlite3
@@ -18,6 +20,7 @@ from bs4 import BeautifulSoup
 BASE_DIR = Path(__file__).resolve().parent
 COLLECTOR_DB_PATH = BASE_DIR / "collector_data.db"
 REQUEST_TIMEOUT_SECONDS = 10
+AUTHORIZED_PACKAGE_TIMEOUT_SECONDS = 8
 MAX_ITEMS_PER_SOURCE = 30
 MAX_HTML_SHALLOW_LINKS = 20
 REQUEST_DELAY_SECONDS = 0.15
@@ -34,7 +37,8 @@ DEFAULT_KEYWORDS = [
     "华工",
 ]
 
-ALLOWED_SOURCE_TYPES = {"rss", "api", "public_html"}
+AUTHORIZED_SOURCE_TYPES = {"local_folder", "data_package_url", "authorized_api", "data_provider"}
+ALLOWED_SOURCE_TYPES = {"rss", "api", "public_html", *AUTHORIZED_SOURCE_TYPES}
 ALLOWED_ITEM_STATUSES = {"new", "reviewed", "ignored"}
 BLOCKED_PATH_KEYWORDS = {
     "login",
@@ -141,8 +145,12 @@ def row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
 def normalize_source_type(source_type: str) -> str:
     value = (source_type or "").strip()
     if value not in ALLOWED_SOURCE_TYPES:
-        raise ValueError("source_type must be rss, api, or public_html")
+        raise ValueError("source_type must be rss, api, public_html, local_folder, data_package_url, authorized_api, or data_provider")
     return value
+
+
+def is_authorized_source_type(source_type: str) -> bool:
+    return (source_type or "").strip() in AUTHORIZED_SOURCE_TYPES
 
 
 def list_sources() -> List[Dict[str, Any]]:
@@ -333,6 +341,98 @@ def manual_title_from_summary(summary: str) -> str:
     first_sentence = re.split(r"[。！？!?]", text, maxsplit=1)[0].strip()
     candidate = first_sentence or text
     return candidate[:30].strip()
+
+
+def normalize_authorized_platform(value: Any, fallback: str = "") -> str:
+    text = clean_manual_import_text(value, 120)
+    fallback_text = clean_manual_import_text(fallback, 120)
+    candidate = text if is_meaningful_manual_value(text) else fallback_text
+    lowered = candidate.lower()
+    if "小红书" in candidate or "xiaohongshu" in lowered or "xhs" in lowered:
+        return "小红书授权数据"
+    if "美团" in candidate or "meituan" in lowered:
+        return "美团授权数据"
+    if "大众点评" in candidate or "点评" in candidate or "dianping" in lowered:
+        return "大众点评授权数据"
+    if is_meaningful_manual_value(candidate):
+        return candidate
+    return "其他授权数据源"
+
+
+def normalize_authorized_url(value: Any) -> str:
+    text = clean_manual_import_text(value, 1000)
+    if not is_meaningful_manual_value(text):
+        return ""
+    parsed = urlparse(text)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return parsed._replace(fragment="").geturl()
+    return ""
+
+
+def first_authorized_value(row: Dict[str, Any], keys: List[str]) -> Any:
+    for key in keys:
+        if key in row and row[key] not in (None, ""):
+            return row[key]
+    normalized = {str(key).strip().lower().replace(" ", ""): value for key, value in row.items()}
+    for key in keys:
+        lookup = str(key).strip().lower().replace(" ", "")
+        if lookup in normalized and normalized[lookup] not in (None, ""):
+            return normalized[lookup]
+    return ""
+
+
+def authorized_title_from_summary(summary: str) -> str:
+    text = clean_manual_import_text(summary, 300)
+    if not is_meaningful_manual_value(text):
+        return ""
+    first_sentence = re.split(r"[。！？!?\n]", text, maxsplit=1)[0].strip()
+    return (first_sentence or text)[:30].strip()
+
+
+def normalize_authorized_platform_row(row: Dict[str, Any], source: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    platform = normalize_authorized_platform(
+        first_authorized_value(row, ["platform", "source_platform", "来源平台", "平台"]),
+        source.get("platform") or "",
+    )
+    url = normalize_authorized_url(first_authorized_value(row, ["url", "link", "公开URL", "公开 URL", "链接", "来源链接"]))
+    summary = clean_manual_import_text(
+        first_authorized_value(row, ["summary", "description", "content", "text", "摘要", "正文", "内容", "线索简介"]),
+        1000,
+    )
+    title = clean_manual_import_text(first_authorized_value(row, ["title", "name", "标题", "名称"]), 300)
+    if not is_meaningful_manual_value(title):
+        title = authorized_title_from_summary(summary)
+    if not is_meaningful_manual_value(title) and not is_meaningful_manual_value(summary):
+        return None
+    if not is_meaningful_manual_value(title):
+        title = "未命名授权数据条目"
+    if not is_meaningful_manual_value(summary):
+        summary = ""
+
+    source_note = clean_manual_import_text(
+        first_authorized_value(row, ["source_note", "notes", "note", "来源说明", "说明", "备注"]),
+        500,
+    )
+    if is_meaningful_manual_value(source_note):
+        summary = compact_text([summary, f"来源说明：{source_note}"], 1000)
+
+    published_at = clean_manual_import_text(
+        first_authorized_value(row, ["published_at", "published", "date", "created_at", "发布时间", "发布日期"]),
+        100,
+    )
+    if not is_meaningful_manual_value(published_at):
+        published_at = ""
+
+    raw_json = json.dumps(row, ensure_ascii=False)[:5000]
+    return {
+        "title": title,
+        "url": url,
+        "summary": summary,
+        "published_at": published_at,
+        "platform": platform,
+        "raw_json": raw_json,
+        "raw_text": compact_text([title, summary, source_note], 4000),
+    }
 
 
 def raw_hash_for(item: Dict[str, Any]) -> str:
@@ -755,6 +855,90 @@ def extract_json_records(payload: Any) -> List[Any]:
     return []
 
 
+def decode_authorized_bytes(content: bytes) -> str:
+    if not content:
+        return ""
+    for encoding in ["utf-8-sig", "utf-8", "gb18030", "gbk"]:
+        try:
+            return content.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return content.decode("utf-8", errors="replace")
+
+
+def parse_authorized_csv_text(text: str) -> List[Dict[str, Any]]:
+    reader = csv.DictReader(io.StringIO(text or ""))
+    rows = []
+    for row in reader:
+        if isinstance(row, dict):
+            rows.append({safe_text(key, 120): value for key, value in row.items() if key is not None})
+    return rows
+
+
+def parse_authorized_json_text(text: str) -> List[Dict[str, Any]]:
+    payload = json.loads(text or "[]")
+    records = extract_json_records(payload)
+    return [record for record in records if isinstance(record, dict)]
+
+
+def load_rows_from_authorized_file(path: Path) -> List[Dict[str, Any]]:
+    suffix = path.suffix.lower()
+    text = decode_authorized_bytes(path.read_bytes())
+    if suffix == ".csv":
+        return parse_authorized_csv_text(text)
+    if suffix == ".json":
+        return parse_authorized_json_text(text)
+    return []
+
+
+def load_rows_from_local_folder(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    local_path = Path(safe_text(config.get("url"), 1000))
+    if not local_path.exists() or not local_path.is_dir():
+        raise ValueError("授权数据本地目录不存在或不是文件夹")
+
+    files = sorted([*local_path.glob("*.csv"), *local_path.glob("*.json")])
+    rows: List[Dict[str, Any]] = []
+    for path in files:
+        if not path.is_file():
+            continue
+        for row in load_rows_from_authorized_file(path):
+            row.setdefault("source_file", str(path))
+            rows.append(row)
+    return rows
+
+
+def request_authorized_package(url: str) -> requests.Response:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("授权数据包 URL 必须是 http/https")
+    headers = {
+        "User-Agent": "XiaoguweiRealLifeInfoSystem/0.1 authorized-data-package"
+    }
+    response = requests.get(url, headers=headers, timeout=AUTHORIZED_PACKAGE_TIMEOUT_SECONDS)
+    response.raise_for_status()
+    return response
+
+
+def load_rows_from_data_package_url(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    package_url = safe_text(config.get("url"), 1000)
+    response = request_authorized_package(package_url)
+    text = decode_authorized_bytes(response.content or b"")
+    content_type = response.headers.get("content-type", "").lower()
+    path_suffix = Path(urlparse(package_url).path).suffix.lower()
+    if path_suffix == ".csv" or "csv" in content_type:
+        return parse_authorized_csv_text(text)
+    if path_suffix == ".json" or "json" in content_type:
+        return parse_authorized_json_text(text)
+    try:
+        return parse_authorized_json_text(text)
+    except json.JSONDecodeError:
+        return parse_authorized_csv_text(text)
+
+
+def load_rows_from_authorized_api(config: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raise ValueError("授权 API / 合法数据服务商接口已预留配置入口，本轮未接入真实密钥或平台接口")
+
+
 def first_present(record: Dict[str, Any], keys: List[str]) -> Any:
     for key in keys:
         if key in record and record[key]:
@@ -794,6 +978,8 @@ def parse_public_html(text: str, base_url: str, shallow_fetch: bool = True) -> L
 
 
 def fetch_source_items(source: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if is_authorized_source_type(source.get("source_type", "")):
+        raise ValueError("授权数据源请使用授权接入运行入口")
     response = request_source(source["url"])
     source_type = source["source_type"]
     text = decode_response_text(response)
@@ -843,6 +1029,128 @@ def save_items(source: Dict[str, Any], items: List[Dict[str, Any]]) -> int:
                 continue
         conn.commit()
     return inserted
+
+
+def title_summary_hash_for(item: Dict[str, Any]) -> str:
+    raw = json.dumps(
+        {
+            "title": safe_text(item.get("title"), 300),
+            "summary": safe_text(item.get("summary"), 1000),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def insert_collector_item_if_new(conn: sqlite3.Connection, source: Dict[str, Any], item: Dict[str, Any], fetched_at: str) -> str:
+    url = safe_text(item.get("url"), 1000)
+    raw_hash = item.get("raw_hash") or raw_hash_for(item)
+    title_summary_hash = title_summary_hash_for(item)
+
+    if url:
+        existed = conn.execute(
+            "SELECT id FROM collector_items WHERE url = ? LIMIT 1",
+            (url,),
+        ).fetchone()
+        if existed:
+            return "skipped_url"
+
+    existed_hash = conn.execute(
+        "SELECT id FROM collector_items WHERE raw_hash = ? LIMIT 1",
+        (raw_hash,),
+    ).fetchone()
+    if existed_hash:
+        return "skipped_hash"
+
+    rows = conn.execute(
+        "SELECT title, summary FROM collector_items WHERE title = ? LIMIT 50",
+        (safe_text(item.get("title"), 300),),
+    ).fetchall()
+    for row in rows:
+        existed_hash = title_summary_hash_for({"title": row["title"], "summary": row["summary"]})
+        if existed_hash == title_summary_hash:
+            return "skipped_title_summary"
+
+    conn.execute(
+        """
+        INSERT INTO collector_items
+        (source_id, platform, title, url, summary, published_at, fetched_at, raw_hash, raw_json, raw_text, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')
+        """,
+        (
+            source["id"],
+            item.get("platform") or source.get("platform") or "",
+            safe_text(item.get("title"), 300),
+            url,
+            safe_text(item.get("summary"), 1000),
+            safe_text(item.get("published_at"), 100),
+            fetched_at,
+            raw_hash,
+            item.get("raw_json"),
+            item.get("raw_text"),
+        ),
+    )
+    return "inserted"
+
+
+def load_authorized_source_rows(source: Dict[str, Any]) -> List[Dict[str, Any]]:
+    source_type = source.get("source_type") or ""
+    if source_type == "local_folder":
+        return load_rows_from_local_folder(source)
+    if source_type == "data_package_url":
+        return load_rows_from_data_package_url(source)
+    if source_type in {"authorized_api", "data_provider"}:
+        return load_rows_from_authorized_api(source)
+    raise ValueError("不是合法授权数据源类型")
+
+
+def run_authorized_source(source_id: int) -> Dict[str, Any]:
+    init_collector_db()
+    source = get_source(source_id)
+    if not source:
+        raise ValueError("collector source not found")
+    if not is_authorized_source_type(source.get("source_type", "")):
+        raise ValueError("不是合法授权数据源")
+
+    started_at = now_text()
+    inserted = 0
+    skipped = 0
+    failed_rows = 0
+    errors: List[str] = []
+
+    try:
+        rows = load_authorized_source_rows(source)
+        fetched_at = now_text()
+        with get_connection() as conn:
+            for row in rows:
+                item = normalize_authorized_platform_row(row, source)
+                if not item:
+                    skipped += 1
+                    continue
+                item["raw_hash"] = raw_hash_for(item)
+                result = insert_collector_item_if_new(conn, source, item, fetched_at)
+                if result == "inserted":
+                    inserted += 1
+                else:
+                    skipped += 1
+            conn.commit()
+        status = "success"
+        error = ""
+    except Exception as exc:
+        status = "failed"
+        error = safe_text(exc, 500)
+        errors.append(error)
+
+    run = record_run(source_id, status, started_at, inserted, error)
+    return {
+        "source": source,
+        "run": run,
+        "new_items": inserted,
+        "skipped_items": skipped,
+        "failed_rows": failed_rows,
+        "errors": errors,
+    }
 
 
 def preview_source(source_id: int) -> Dict[str, Any]:
@@ -1059,6 +1367,8 @@ def run_source(source_id: int) -> Dict[str, Any]:
     source = get_source(source_id)
     if not source:
         raise ValueError("collector source not found")
+    if is_authorized_source_type(source.get("source_type", "")):
+        return run_authorized_source(source_id)
 
     started_at = now_text()
     try:
@@ -1079,7 +1389,11 @@ def enabled_sources() -> List[Dict[str, Any]]:
     init_collector_db()
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM collector_sources WHERE enabled = 1 ORDER BY id ASC"
+            """
+            SELECT * FROM collector_sources
+            WHERE enabled = 1 AND source_type NOT IN ('local_folder', 'data_package_url', 'authorized_api', 'data_provider')
+            ORDER BY id ASC
+            """
         ).fetchall()
     return [row_to_dict(row) for row in rows]
 
@@ -1120,6 +1434,70 @@ def run_all_enabled_sources() -> Dict[str, Any]:
         "item_count": item_count,
         "results": results,
     }
+
+
+def enabled_authorized_sources() -> List[Dict[str, Any]]:
+    init_collector_db()
+    placeholders = ",".join("?" for _ in AUTHORIZED_SOURCE_TYPES)
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT * FROM collector_sources
+            WHERE enabled = 1 AND source_type IN ({placeholders})
+            ORDER BY id ASC
+            """,
+            tuple(sorted(AUTHORIZED_SOURCE_TYPES)),
+        ).fetchall()
+    return [row_to_dict(row) for row in rows]
+
+
+def run_daily_authorized_sources() -> Dict[str, Any]:
+    init_collector_db()
+    sources = enabled_authorized_sources()
+    result = {
+        "total_sources": len(sources),
+        "success": 0,
+        "skipped": 0,
+        "failed": 0,
+        "new_items": 0,
+        "skipped_items": 0,
+        "errors": [],
+        "results": [],
+    }
+
+    if not sources:
+        result["skipped"] = 1
+        result["errors"].append("没有启用的合法授权数据源，已安全跳过")
+        record_run(None, "skipped", now_text(), 0, "没有启用的合法授权数据源，已安全跳过")
+        return result
+
+    for source in sources:
+        if source.get("source_type") in {"authorized_api", "data_provider"}:
+            run = record_run(
+                source.get("id"),
+                "skipped",
+                now_text(),
+                0,
+                "授权 API / 合法数据服务商接口为预留入口，本轮未配置真实授权连接",
+            )
+            result["skipped"] += 1
+            result["results"].append({"source": source, "run": run})
+            continue
+
+        source_result = run_authorized_source(source["id"])
+        result["results"].append(source_result)
+        status = source_result.get("run", {}).get("status")
+        if status == "success":
+            result["success"] += 1
+        elif status == "skipped":
+            result["skipped"] += 1
+        else:
+            result["failed"] += 1
+        result["new_items"] += int(source_result.get("new_items") or 0)
+        result["skipped_items"] += int(source_result.get("skipped_items") or 0)
+        result["errors"].extend(source_result.get("errors") or [])
+
+    return result
 
 
 def list_items(

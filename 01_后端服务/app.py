@@ -28,6 +28,7 @@ from platform_collector import (
     mark_collector_item_reviewed,
     preview_source as collector_preview_source,
     run_all_enabled_sources as collector_run_all_enabled_sources,
+    run_daily_authorized_sources as collector_run_daily_authorized_sources,
     run_source as collector_run_source,
     update_source as collector_update_source,
 )
@@ -427,6 +428,7 @@ def scheduler_status():
         "message": "定时任务已配置",
         "daily_crawl_time": "每天早上 09:00",
         "daily_platform_collector_time": "每天凌晨 03:30",
+        "daily_authorized_data_time": "每天凌晨 03:30，随外部平台采集任务一起执行",
         "timezone": "Asia/Shanghai"
     }
 
@@ -567,6 +569,19 @@ def run_all_collector_sources_now(
     result = collector_run_all_enabled_sources()
     return {
         "message": "全部启用采集源已执行",
+        "result": result
+    }
+
+
+@app.post("/collector-admin/run-daily-authorized")
+def run_daily_authorized_collector_sources_now(
+    request: AdminTokenRequest,
+    db: Session = Depends(get_db)
+):
+    require_admin_token(db, request.token)
+    result = collector_run_daily_authorized_sources()
+    return {
+        "message": "今日合法授权数据源更新已执行",
         "result": result
     }
 

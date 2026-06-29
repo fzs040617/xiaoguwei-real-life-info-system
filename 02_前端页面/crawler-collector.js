@@ -1,6 +1,23 @@
 const COLLECTOR_TOKEN_KEY = "xgw_user_token";
 const COLLECTOR_BACKEND_URL = "http://127.0.0.1:8000";
 const COLLECTOR_NETWORK_MESSAGE = "无法连接后端，请确认 http://127.0.0.1:8000 已启动";
+const AUTHORIZED_SOURCE_TYPES = new Set(["local_folder", "data_package_url", "authorized_api", "data_provider"]);
+const COLLECTOR_DEFAULT_MODULE = "source-create";
+const COLLECTOR_SECTION_MODULES = {
+    "collector-section-create": "source-create",
+    "collector-section-templates": "source-create",
+    "collector-section-daily": "daily-authorized",
+    "collector-section-sources": "source-list",
+    "collector-section-preview": "source-list",
+    "collector-section-manual": "manual-import",
+    "collector-section-items": "items",
+    "collector-section-runs": "runs"
+};
+const COLLECTOR_ALWAYS_EXPANDED_SECTIONS = new Set([
+    "collector-section-sources",
+    "collector-section-items",
+    "collector-section-runs"
+]);
 let collectorLastAutoKeyword = "";
 let collectorPreviewDocumentEventsBound = false;
 const collectorExpandedSources = new Set();
@@ -66,9 +83,12 @@ function collectorApiBase() {
 
 function collectorMessage(text, isError = false) {
     const box = document.getElementById("collectorMessage");
-    if (!box) return;
-    box.textContent = text || "";
-    box.classList.toggle("user-admin-message-error", Boolean(isError));
+    const dailyBox = document.getElementById("collectorDailyMessage");
+    [box, dailyBox].forEach(messageBox => {
+        if (!messageBox) return;
+        messageBox.textContent = text || "";
+        messageBox.classList.toggle("user-admin-message-error", Boolean(isError));
+    });
 }
 
 function collectorClueTransferMessage(clueId) {
@@ -101,6 +121,13 @@ function collectorDetectMessage(text, isError = false) {
     box.classList.toggle("user-admin-message-error", Boolean(isError));
 }
 
+function collectorSourceConfigStatus(text, isError = false) {
+    const box = document.getElementById("collectorSourceConfigStatus");
+    if (!box) return;
+    box.textContent = text || "";
+    box.classList.toggle("user-admin-message-error", Boolean(isError));
+}
+
 function collectorManualMessage(text, isError = false) {
     const box = document.getElementById("collectorManualMessage");
     if (!box) return;
@@ -117,6 +144,40 @@ function collectorErrorMessage(error) {
         return COLLECTOR_NETWORK_MESSAGE;
     }
     return message || "请求失败";
+}
+
+function setCollectorButtonBusy(button, busyText = "处理中...") {
+    if (!button) return null;
+    const state = {
+        text: button.textContent,
+        disabled: button.disabled
+    };
+    button.disabled = true;
+    button.textContent = busyText;
+    return state;
+}
+
+function restoreCollectorButton(button, state) {
+    if (!button || !state) return;
+    button.disabled = state.disabled;
+    button.textContent = state.text;
+}
+
+function collectorSourceTypeLabel(sourceType) {
+    const labels = {
+        rss: "RSS",
+        api: "公开 JSON API",
+        public_html: "公开 HTML",
+        local_folder: "本地目录 CSV / JSON",
+        data_package_url: "授权数据包 URL",
+        authorized_api: "授权 API（预留）",
+        data_provider: "合法数据服务商（预留）"
+    };
+    return labels[sourceType] || sourceType || "-";
+}
+
+function isAuthorizedSourceType(sourceType) {
+    return AUTHORIZED_SOURCE_TYPES.has(sourceType);
 }
 
 function ensureCollectorItemActionMessage() {
@@ -156,8 +217,11 @@ async function collectorRequest(path, options = {}) {
 }
 
 async function initCollectorPage() {
+    initCollectorPanelCollapseState();
+    initCollectorModuleTabs();
     collectorMessage("");
     collectorDetectMessage("");
+    collectorSourceConfigStatus("");
     collectorManualMessage("");
     renderCollectorTemplates();
     setupCollectorPreviewReadyState();
@@ -191,6 +255,7 @@ function bindCollectorPreviewDocumentEvents() {
 }
 
 function handleCollectorPageClick(event) {
+    handleCollectorModuleTabClick(event);
     handleCollectorSectionCollapseClick(event);
     handleCollectorSectionToggleClick(event);
     handleCollectorItemToClueClick(event);
@@ -211,6 +276,66 @@ function handleCollectorPageClick(event) {
     handleCollectorPreviewDetailCollapseClick(event);
     handleCollectorPreviewDetailClick(event);
     handleCollectorPreviewClick(event);
+}
+
+function initCollectorModuleTabs() {
+    showCollectorModule(COLLECTOR_DEFAULT_MODULE);
+}
+
+function initCollectorPanelCollapseState() {
+    document.querySelectorAll(".collector-panel").forEach(panel => {
+        syncCollectorSectionToggleState(panel);
+    });
+}
+
+function handleCollectorModuleTabClick(event) {
+    const target = event.target && event.target.closest ? event.target : event.target.parentElement;
+    const btn = target ? target.closest("[data-collector-tab]") : null;
+    if (!btn) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    showCollectorModule(btn.dataset.collectorTab || COLLECTOR_DEFAULT_MODULE, true);
+}
+
+function showCollectorModule(moduleName, shouldScroll = false) {
+    const requestedModule = moduleName || COLLECTOR_DEFAULT_MODULE;
+    const panels = Array.from(document.querySelectorAll("[data-collector-module]"));
+    const hasRequestedModule = panels.some(panel => panel.dataset.collectorModule === requestedModule);
+    const activeModule = hasRequestedModule ? requestedModule : COLLECTOR_DEFAULT_MODULE;
+
+    panels.forEach(panel => {
+        const isActivePanel = panel.dataset.collectorModule === activeModule;
+        panel.hidden = !isActivePanel;
+        if (isActivePanel && panel.id) {
+            if (COLLECTOR_ALWAYS_EXPANDED_SECTIONS.has(panel.id)) {
+                setCollectorSectionExpanded(panel.id, true);
+            } else {
+                syncCollectorSectionToggleState(panel.id);
+            }
+        }
+    });
+
+    document.querySelectorAll("[data-collector-tab]").forEach(tab => {
+        const isActiveTab = tab.dataset.collectorTab === activeModule;
+        tab.classList.toggle("active", isActiveTab);
+        tab.setAttribute("aria-selected", isActiveTab ? "true" : "false");
+    });
+
+    if (shouldScroll) {
+        const tabBar = document.querySelector(".collector-module-tabs");
+        if (tabBar && typeof tabBar.scrollIntoView === "function") {
+            tabBar.scrollIntoView({behavior: "smooth", block: "start"});
+        }
+    }
+}
+
+function showCollectorModuleForSection(sectionId) {
+    const moduleName = COLLECTOR_SECTION_MODULES[sectionId || ""];
+    if (moduleName) {
+        showCollectorModule(moduleName);
+    }
 }
 
 function setupCollectorSourceFilters() {
@@ -318,7 +443,8 @@ function handleCollectorItemFilterClick(event) {
     event.stopPropagation();
 
     collectorViewingSourceName = "";
-    loadCollectorItems();
+    const buttonState = setCollectorButtonBusy(btn, "筛选中...");
+    loadCollectorItems().finally(() => restoreCollectorButton(btn, buttonState));
 }
 
 function handleCollectorItemClearFilterClick(event) {
@@ -351,7 +477,8 @@ function handleCollectorManualDetectClick(event) {
     event.preventDefault();
     event.stopPropagation();
 
-    detectManualCollectorItem();
+    const buttonState = setCollectorButtonBusy(btn, "识别中...");
+    detectManualCollectorItem().finally(() => restoreCollectorButton(btn, buttonState));
 }
 
 function handleCollectorManualClearClick(event) {
@@ -438,7 +565,9 @@ function handleCollectorSourceRunsClick(event) {
         collectorMessage("查看该源日志失败：缺少采集源 ID", true);
         return;
     }
-    viewCollectorRunsForSource(sourceId, btn.dataset.sourceName || "");
+    const buttonState = setCollectorButtonBusy(btn, "加载中...");
+    viewCollectorRunsForSource(sourceId, btn.dataset.sourceName || "")
+        .finally(() => restoreCollectorButton(btn, buttonState));
 }
 
 function handleCollectorSourceItemsClick(event) {
@@ -454,7 +583,9 @@ function handleCollectorSourceItemsClick(event) {
         collectorMessage("查看该源采集条目失败：缺少采集源 ID", true);
         return;
     }
-    viewCollectorItemsForSource(sourceId, btn.dataset.sourceName || "");
+    const buttonState = setCollectorButtonBusy(btn, "加载中...");
+    viewCollectorItemsForSource(sourceId, btn.dataset.sourceName || "")
+        .finally(() => restoreCollectorButton(btn, buttonState));
 }
 
 function handleCollectorAllRunsClick(event) {
@@ -465,7 +596,8 @@ function handleCollectorAllRunsClick(event) {
     event.preventDefault();
     event.stopPropagation();
 
-    loadCollectorRuns();
+    const buttonState = setCollectorButtonBusy(btn, "刷新中...");
+    loadCollectorRuns().finally(() => restoreCollectorButton(btn, buttonState));
 }
 
 function handleCollectorPreviewDetailCollapseClick(event) {
@@ -515,11 +647,12 @@ function handleCollectorPreviewClick(event) {
 function toggleCollectorSection(sectionId) {
     const section = document.getElementById(sectionId || "");
     if (!section) return;
-    const shouldExpand = section.classList.contains("collector-section-collapsed");
+    const shouldExpand = isCollectorSectionCollapsed(section);
     setCollectorSectionExpanded(sectionId, shouldExpand);
 }
 
 function expandCollectorSection(sectionId) {
+    showCollectorModuleForSection(sectionId);
     setCollectorSectionExpanded(sectionId, true);
 }
 
@@ -534,13 +667,44 @@ function setCollectorSectionExpanded(sectionId, expanded) {
     const section = document.getElementById(sectionId || "");
     if (!section) return;
     section.classList.toggle("collector-section-collapsed", !expanded);
+    section.classList.toggle("is-collapsed", !expanded);
+    section.setAttribute("aria-expanded", expanded ? "true" : "false");
+    const body = section.querySelector(".collector-panel-body");
+    if (body) {
+        body.hidden = !expanded;
+    }
+    syncCollectorSectionToggleState(sectionId);
+}
+
+function isCollectorSectionCollapsed(section) {
+    if (!section) return false;
+    const body = section.querySelector(".collector-panel-body");
+    return section.classList.contains("is-collapsed") ||
+        section.classList.contains("collector-section-collapsed") ||
+        Boolean(body && body.hidden);
+}
+
+function syncCollectorSectionToggleState(sectionOrId) {
+    const section = typeof sectionOrId === "string"
+        ? document.getElementById(sectionOrId || "")
+        : sectionOrId;
+    if (!section) return;
+    const collapsed = isCollectorSectionCollapsed(section);
+    section.classList.toggle("collector-section-collapsed", collapsed);
+    section.classList.toggle("is-collapsed", collapsed);
+    section.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    const body = section.querySelector(".collector-panel-body");
+    if (body) {
+        body.hidden = collapsed;
+    }
     const btn = section.querySelector('[data-action="toggle-section"]');
     if (btn) {
-        if (sectionId === "collector-section-sources") {
-            btn.textContent = expanded ? "收起列表" : "展开列表";
+        if (section.id === "collector-section-sources") {
+            btn.textContent = collapsed ? "展开列表" : "收起列表";
         } else {
-            btn.textContent = expanded ? "收起" : "展开";
+            btn.textContent = collapsed ? "展开" : "收起";
         }
+        btn.setAttribute("aria-expanded", collapsed ? "false" : "true");
     }
 }
 
@@ -659,12 +823,41 @@ async function loadCollectorSources() {
     }
 }
 
-async function detectCollectorSource() {
+async function detectCollectorSource(button = null) {
+    const configTextInput = document.getElementById("collectorSourceConfigText");
     const urlInput = document.getElementById("collectorUrl");
+    const sourceTypeInput = document.getElementById("collectorType");
+    const sourceType = sourceTypeInput ? sourceTypeInput.value : "";
+    const configText = configTextInput ? configTextInput.value.trim() : "";
     const url = urlInput ? urlInput.value.trim() : "";
+    const parsedConfig = parseCollectorSourceConfigText(configText || url);
+    const buttonState = setCollectorButtonBusy(button, "识别中...");
+
+    if (configText || parsedConfig.hasConfigSignal) {
+        if (parsedConfig.isComplete) {
+            fillCollectorSourceForm(parsedConfig);
+            collectorSourceConfigStatus("已识别为采集源配置，并填入下方表单，请核对后保存。");
+            collectorDetectMessage(configText ? "" : "已识别为采集源配置，并填入下方表单，请核对后保存。");
+            restoreCollectorButton(button, buttonState);
+            return;
+        }
+        collectorSourceConfigStatus("未识别到完整采集源配置，请检查名称、平台类型、数据源类型和数据地址。", true);
+        if (!configText) {
+            collectorDetectMessage("未识别到完整采集源配置，请检查名称、平台类型、数据源类型和数据地址。", true);
+        }
+        restoreCollectorButton(button, buttonState);
+        return;
+    }
+
+    if (isAuthorizedSourceType(sourceType)) {
+        collectorDetectMessage("授权数据源不需要公开 URL 智能识别。请确认数据地址和授权说明后直接新增。");
+        restoreCollectorButton(button, buttonState);
+        return;
+    }
 
     if (!url) {
         collectorDetectMessage("请先填写需要识别的公开 URL。", true);
+        restoreCollectorButton(button, buttonState);
         return;
     }
 
@@ -706,7 +899,137 @@ async function detectCollectorSource() {
         );
     } catch (error) {
         collectorDetectMessage(`识别失败：${collectorErrorMessage(error)}`, true);
+    } finally {
+        restoreCollectorButton(button, buttonState);
     }
+}
+
+function clearCollectorSourceConfigText() {
+    const input = document.getElementById("collectorSourceConfigText");
+    if (input) {
+        input.value = "";
+    }
+    collectorSourceConfigStatus("");
+}
+
+function parseCollectorSourceConfigText(rawText) {
+    const sourceFieldAliases = {
+        "名称": "name",
+        "来源名称": "name",
+        "数据源名称": "name",
+        "平台类型": "platform",
+        "来源平台": "platform",
+        "数据源类型": "sourceType",
+        "采集类型": "sourceType",
+        "数据地址": "url",
+        "公开URL": "url",
+        "URL": "url",
+        "链接": "url",
+        "授权说明": "notes",
+        "来源说明": "notes",
+        "更新频率": "interval",
+        "状态": "enabled"
+    };
+    const config = {
+        name: "",
+        platform: "",
+        sourceType: "",
+        url: "",
+        notes: "",
+        enabled: "",
+        interval: "",
+        hasConfigSignal: false,
+        isComplete: false
+    };
+    let currentField = "";
+
+    String(rawText || "").split(/\r?\n/).forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        const match = trimmed.match(/^([^：:]{1,24})\s*[：:]\s*(.*)$/);
+        if (match) {
+            const label = normalizeCollectorConfigLabel(match[1]);
+            const field = sourceFieldAliases[label] || "";
+            if (field) {
+                config.hasConfigSignal = true;
+                currentField = field;
+                config[field] = match[2].trim();
+                return;
+            }
+        }
+        if (currentField === "notes") {
+            config.notes = [config.notes, trimmed].filter(Boolean).join("\n");
+        }
+    });
+
+    config.name = cleanCollectorConfigValue(config.name);
+    config.platform = normalizeCollectorConfigPlatform(config.platform);
+    config.sourceType = normalizeCollectorConfigSourceType(config.sourceType);
+    config.url = cleanCollectorConfigValue(config.url);
+    config.notes = cleanCollectorConfigValue(config.notes);
+    config.enabled = normalizeCollectorConfigEnabled(config.enabled);
+    config.isComplete = Boolean(config.name && config.platform && config.sourceType && config.url);
+    return config;
+}
+
+function normalizeCollectorConfigLabel(label) {
+    return String(label || "").replace(/\s+/g, "").toUpperCase() === "URL"
+        ? "URL"
+        : String(label || "").replace(/\s+/g, "");
+}
+
+function cleanCollectorConfigValue(value) {
+    return String(value || "").trim().replace(/^["'“”‘’]+|["'“”‘’]+$/g, "").trim();
+}
+
+function normalizeCollectorConfigPlatform(value) {
+    const text = cleanCollectorConfigValue(value);
+    const key = text.replace(/\s+/g, "").toLowerCase();
+    const platformMap = [
+        {tests: ["小红书授权数据", "小红书", "xhs", "xiaohongshu"], value: "小红书授权数据"},
+        {tests: ["美团授权数据", "美团", "meituan"], value: "美团授权数据"},
+        {tests: ["大众点评授权数据", "大众点评", "点评", "dianping"], value: "大众点评授权数据"},
+        {tests: ["学校官网"], value: "学校官网"},
+        {tests: ["政务公开"], value: "政务公开"},
+        {tests: ["公众号公开页", "公众号"], value: "公众号公开页"},
+        {tests: ["其他授权数据源", "授权数据源"], value: "其他授权数据源"},
+        {tests: ["其他公开网页", "公开网页"], value: "其他公开网页"}
+    ];
+    const matched = platformMap.find(item => item.tests.some(test => key === test.toLowerCase() || key.includes(test.toLowerCase())));
+    return matched ? matched.value : text;
+}
+
+function normalizeCollectorConfigSourceType(value) {
+    const text = cleanCollectorConfigValue(value);
+    const key = text.replace(/\s+/g, "").toLowerCase();
+    if (!key) return "";
+    if (key.includes("local_folder") || key.includes("本地目录")) return "local_folder";
+    if (key.includes("data_package_url") || key.includes("授权数据包url") || key.includes("数据包url")) return "data_package_url";
+    if (key.includes("authorized_api") || key.includes("授权api")) return "authorized_api";
+    if (key.includes("data_provider") || key.includes("合法数据服务商") || key.includes("数据服务商")) return "data_provider";
+    if (key.includes("rss") || key.includes("公开rss")) return "rss";
+    if (key.includes("api") || key.includes("json")) return "api";
+    if (key.includes("公开页面") || key.includes("html") || key.includes("网页")) return "public_html";
+    if (key.includes("人工导入来源") || key.includes("人工导入")) return "public_html";
+    return normalizeCollectorSourceType(text);
+}
+
+function normalizeCollectorConfigEnabled(value) {
+    const key = cleanCollectorConfigValue(value).replace(/\s+/g, "").toLowerCase();
+    if (!key) return "";
+    if (["启用", "是", "true", "enabled", "on", "1"].includes(key)) return "true";
+    if (["停用", "禁用", "否", "false", "disabled", "off", "0"].includes(key)) return "false";
+    return "";
+}
+
+function fillCollectorSourceForm(parsedConfig) {
+    if (!parsedConfig) return;
+    setInputValue("collectorName", parsedConfig.name, true);
+    setInputValue("collectorPlatform", parsedConfig.platform, true);
+    setInputValue("collectorType", parsedConfig.sourceType, true);
+    setInputValue("collectorUrl", parsedConfig.url, true);
+    setInputValue("collectorNotes", parsedConfig.notes, true);
+    setInputValue("collectorEnabled", parsedConfig.enabled || "true", true);
 }
 
 function setInputValue(id, value, alwaysReplace) {
@@ -719,7 +1042,7 @@ function setInputValue(id, value, alwaysReplace) {
 
 function normalizeCollectorSourceType(sourceType) {
     const value = String(sourceType || "").trim();
-    if (["rss", "api", "public_html"].includes(value)) {
+    if (["rss", "api", "public_html", "local_folder", "data_package_url", "authorized_api", "data_provider"].includes(value)) {
         return value;
     }
     return "public_html";
@@ -759,7 +1082,7 @@ function fillCollectorTemplate(index) {
     collectorDetectMessage(`已填入模板：${template.name}。请确认后再新增采集源。`);
 }
 
-async function submitCollectorSource() {
+async function submitCollectorSource(button = null) {
     const name = document.getElementById("collectorName").value.trim();
     const platform = document.getElementById("collectorPlatform").value.trim();
     const sourceType = document.getElementById("collectorType").value;
@@ -769,10 +1092,21 @@ async function submitCollectorSource() {
     const notes = document.getElementById("collectorNotes").value.trim();
 
     if (!name || !url) {
-        collectorMessage("请填写名称和 URL。", true);
+        collectorMessage("请填写名称和数据地址。", true);
         return;
     }
 
+    if (sourceType === "data_package_url" && !/^https?:\/\//i.test(url)) {
+        collectorMessage("授权数据包 URL 必须是 http/https。", true);
+        return;
+    }
+
+    if (isAuthorizedSourceType(sourceType) && !notes) {
+        collectorMessage("请填写授权说明，说明该数据来自官方授权、商家授权导出或合法数据服务商。", true);
+        return;
+    }
+
+    const buttonState = setCollectorButtonBusy(button, "新增中...");
     try {
         await collectorRequest("/collector-admin/sources", {
             method: "POST",
@@ -801,10 +1135,39 @@ async function submitCollectorSource() {
         await loadCollectorSources();
     } catch (error) {
         collectorMessage(`新增失败：${collectorErrorMessage(error)}`, true);
+    } finally {
+        restoreCollectorButton(button, buttonState);
     }
 }
 
-async function toggleCollectorSource(sourceId, enabled) {
+async function runDailyAuthorizedSources(button = null) {
+    const buttonState = setCollectorButtonBusy(button, "运行中...");
+    collectorMessage("正在运行今日授权数据更新，请稍等...");
+    try {
+        const data = await collectorRequest("/collector-admin/run-daily-authorized", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({token: collectorToken()})
+        });
+        const result = data.result || {};
+        const errors = Array.isArray(result.errors) && result.errors.length
+            ? `；错误：${result.errors.slice(0, 3).join("；")}`
+            : "";
+        collectorMessage(
+            `授权数据更新完成：源 ${result.total_sources ?? 0} 个，成功 ${result.success ?? 0}，跳过 ${result.skipped ?? 0}，失败 ${result.failed ?? 0}，新增 ${result.new_items ?? 0} 条，重复/无效跳过 ${result.skipped_items ?? 0} 条${errors}`
+        );
+        expandCollectorSection("collector-section-items");
+        await Promise.all([loadCollectorSources(), loadCollectorItems(), loadCollectorRuns()]);
+    } catch (error) {
+        collectorMessage(`授权数据更新失败：${collectorErrorMessage(error)}`, true);
+        await loadCollectorRuns();
+    } finally {
+        restoreCollectorButton(button, buttonState);
+    }
+}
+
+async function toggleCollectorSource(sourceId, enabled, button = null) {
+    const buttonState = setCollectorButtonBusy(button, enabled ? "启用中..." : "停用中...");
     try {
         await collectorRequest(`/collector-admin/sources/${sourceId}`, {
             method: "PATCH",
@@ -818,10 +1181,13 @@ async function toggleCollectorSource(sourceId, enabled) {
         await loadCollectorSources();
     } catch (error) {
         collectorMessage(`切换失败：${collectorErrorMessage(error)}`, true);
+    } finally {
+        restoreCollectorButton(button, buttonState);
     }
 }
 
-async function runCollectorSource(sourceId) {
+async function runCollectorSource(sourceId, button = null) {
+    const buttonState = setCollectorButtonBusy(button, "运行中...");
     collectorMessage("正在运行采集源，请稍等...");
     try {
         const data = await collectorRequest(`/collector-admin/sources/${sourceId}/run`, {
@@ -837,6 +1203,8 @@ async function runCollectorSource(sourceId) {
     } catch (error) {
         collectorMessage(`运行失败：${collectorErrorMessage(error)}`, true);
         await loadCollectorRuns();
+    } finally {
+        restoreCollectorButton(button, buttonState);
     }
 }
 
@@ -869,8 +1237,9 @@ async function previewCollectorSource(sourceId) {
     }
 }
 
-async function runAllCollectorSources() {
-    collectorMessage("正在运行全部启用采集源，请稍等...");
+async function runAllCollectorSources(button = null) {
+    const buttonState = setCollectorButtonBusy(button, "运行中...");
+    collectorMessage("正在运行全部公开 RSS/API/HTML 采集源，请稍等...");
     try {
         const data = await collectorRequest("/collector-admin/run-all", {
             method: "POST",
@@ -878,11 +1247,13 @@ async function runAllCollectorSources() {
             body: JSON.stringify({token: collectorToken()})
         });
         const result = data.result || {};
-        collectorMessage(`全部运行完成：源 ${result.total_sources ?? 0} 个，新增 ${result.item_count ?? 0} 条，失败 ${result.failed_count ?? 0} 个。`);
+        collectorMessage(`公开源运行完成：源 ${result.total_sources ?? 0} 个，新增 ${result.item_count ?? 0} 条，失败 ${result.failed_count ?? 0} 个。授权数据源请使用“运行今日授权数据更新”。`);
         await Promise.all([loadCollectorSources(), loadCollectorItems(), loadCollectorRuns()]);
     } catch (error) {
-        collectorMessage(`全部运行失败：${collectorErrorMessage(error)}`, true);
+        collectorMessage(`公开源运行失败：${collectorErrorMessage(error)}`, true);
         await loadCollectorRuns();
+    } finally {
+        restoreCollectorButton(button, buttonState);
     }
 }
 
@@ -1254,7 +1625,8 @@ function collectorSourceDiagnosticInfo(source, duplicateMaps = collectorSourceDu
     const duplicateUrl = urlKey && (duplicateMaps.url.get(urlKey) || 0) > 1;
     const duplicatePlatformUrl = normalizeCollectorDiagnosticValue(source.platform) && urlKey &&
         (duplicateMaps.platformUrl.get(platformUrlKey) || 0) > 1;
-    const enabledNoItems = Boolean(source.enabled) && hasKnownItemCount && itemCount === 0;
+    const authorizedSource = isAuthorizedSourceType(source.source_type);
+    const enabledNoItems = Boolean(source.enabled) && hasKnownItemCount && itemCount === 0 && !authorizedSource;
     const failed = latestStatus === "failed";
     const suspectTest = collectorSourceLooksLikeTest(source);
     const hasHistoricalItems = hasKnownItemCount && itemCount > 0;
@@ -1272,7 +1644,7 @@ function collectorSourceDiagnosticInfo(source, duplicateMaps = collectorSourceDu
         suspectTest,
         hasHistoricalItems,
         problem: failed || enabledNoItems || duplicateName || duplicateUrl || duplicatePlatformUrl || suspectTest ||
-            (Boolean(source.enabled) && latestStatus === "none")
+            (Boolean(source.enabled) && latestStatus === "none" && !authorizedSource)
     };
 }
 
@@ -1507,7 +1879,7 @@ function renderCollectorSources(sources, totalCount = sources.length, filterStat
         <div class="target-item collector-source-item ${collectorExpandedSources.has(Number(source.id)) ? "collector-source-expanded" : ""}" id="collector-source-${collectorEscapeAttribute(source.id)}">
             <div class="collector-source-summary">
                 <div class="collector-source-main">
-                    <span class="tag">${collectorEscapeHtml(source.source_type || "-")}</span>
+                    <span class="tag">${collectorEscapeHtml(collectorSourceTypeLabel(source.source_type))}</span>
                     <span class="tag ${source.enabled ? "" : "danger-tag"}">${source.enabled ? "启用中" : "已停用"}</span>
                     <strong>${collectorEscapeHtml(source.name || "未命名采集源")}</strong>
                     <span class="collector-source-platform">${collectorEscapeHtml(source.platform || "未填写平台")}</span>
@@ -1518,8 +1890,8 @@ function renderCollectorSources(sources, totalCount = sources.length, filterStat
                 <div class="collector-source-actions">
                     <button type="button" class="small-button" data-action="toggle-source-detail" data-source-id="${collectorEscapeAttribute(source.id)}">${collectorExpandedSources.has(Number(source.id)) ? "收起" : "展开"}</button>
                     <button type="button" class="small-button btn-secondary collector-preview-btn" data-action="preview" data-source-id="${collectorEscapeAttribute(source.id)}">预览</button>
-                    <button class="small-button verify-button" onclick="runCollectorSource(${source.id})">运行单个源</button>
-                    <button class="small-button" onclick="toggleCollectorSource(${source.id}, ${source.enabled ? "false" : "true"})">${source.enabled ? "停用" : "启用"}</button>
+                    <button class="small-button verify-button" onclick="runCollectorSource(${source.id}, this)">运行单个源</button>
+                    <button class="small-button" onclick="toggleCollectorSource(${source.id}, ${source.enabled ? "false" : "true"}, this)">${source.enabled ? "停用" : "启用"}</button>
                 </div>
             </div>
             <div class="collector-source-details" ${collectorExpandedSources.has(Number(source.id)) ? "" : "hidden"}>
@@ -1828,6 +2200,7 @@ async function transferCollectorItemToClue(itemId, button) {
         collectorClueTransferMessage(data.clue_id);
     } catch (error) {
         collectorMessage(`转入线索库失败：${collectorErrorMessage(error)}`, true);
+    } finally {
         if (button) {
             button.disabled = false;
             button.textContent = originalText || "转入线索库";
@@ -1857,6 +2230,7 @@ async function ignoreCollectorItem(itemId, button) {
         await loadCollectorItems();
     } catch (error) {
         collectorMessage(`标记忽略失败：${collectorErrorMessage(error)}`, true);
+    } finally {
         if (button) {
             button.disabled = false;
             button.textContent = originalText || "忽略";

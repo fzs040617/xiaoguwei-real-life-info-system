@@ -33,8 +33,14 @@ def daily_platform_collector_job():
     print(f"[外部平台每日采集任务] 已触发，当前时间：{now}")
 
     try:
-        from platform_collector import run_all_enabled_sources
-        result = run_all_enabled_sources()
+        from platform_collector import run_all_enabled_sources, run_daily_authorized_sources
+        public_result = run_all_enabled_sources()
+        authorized_result = run_daily_authorized_sources()
+        result = {
+            "message": "外部平台每日采集任务完成",
+            "public_sources": public_result,
+            "authorized_sources": authorized_result,
+        }
     except Exception as exc:
         result = {
             "message": "外部平台每日采集任务失败，但不影响主系统",
@@ -74,5 +80,5 @@ def start_scheduler():
     scheduler.start()
 
     print("[定时任务] 已启动：每天早上 09:00 自动采集")
-    print("[定时任务] 已启动：每天凌晨 03:30 外部平台公开源采集")
+    print("[定时任务] 已启动：每天凌晨 03:30 外部平台公开源采集 + 合法授权数据源接入")
     return scheduler
