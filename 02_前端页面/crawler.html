@@ -102,6 +102,37 @@
                 系统支持每天自动接入合法授权数据源。小红书、美团、大众点评等平台数据必须来自官方授权、商家授权导出或合法数据服务商；系统不会绕过登录、验证码或反爬。
             </p>
 
+            <div class="collector-authorized-template-card">
+                <div class="collector-source-config-header">
+                    <div>
+                        <h3>授权数据源模板说明</h3>
+                        <p>适用于“本地目录 CSV / JSON”和“授权数据包 URL”。本地目录中可放一个或多个 .csv / .json 文件，系统会按文件逐条读取。</p>
+                    </div>
+                    <span>CSV / JSON</span>
+                </div>
+                <div class="collector-template-info-grid">
+                    <div>
+                        <strong>推荐 CSV 列名</strong>
+                        <p>来源平台, 公开URL, 标题, 摘要, 来源说明, 发布时间</p>
+                    </div>
+                    <div>
+                        <strong>英文字段也支持</strong>
+                        <p>platform, url, title, summary, source_note, published_at</p>
+                    </div>
+                </div>
+                <pre class="collector-authorized-template-code"><code>来源平台,公开URL,标题,摘要,来源说明,发布时间
+小红书授权数据,,大学城贝岗糖水店体验,授权数据包中的摘要内容，适合学生党。,合法授权数据包,2026-06-29
+美团授权数据,https://example.com/meituan-test,大学城简餐店,授权数据包中的简餐店摘要。,合法授权数据包,2026-06-29
+大众点评授权数据,,大学城奶茶店反馈,授权数据包中的奶茶店摘要。,合法授权数据包,2026-06-29</code></pre>
+                <ul class="collector-authorized-template-notes">
+                    <li>来源平台建议填写“小红书授权数据”“美团授权数据”“大众点评授权数据”等明确授权来源。</li>
+                    <li>公开 URL 如果没有可以留空；标题和摘要至少填写一个。</li>
+                    <li>重复 URL 或重复标题加摘要会自动跳过。</li>
+                    <li>不要填写平台登录页、个人主页、需要 cookie 的链接、token、密钥或账号信息。</li>
+                    <li>系统不会登录平台，不会绕验证码，不会抓取平台网页。</li>
+                </ul>
+            </div>
+
             <div class="collector-source-config-card">
                 <div class="collector-source-config-header">
                     <div>

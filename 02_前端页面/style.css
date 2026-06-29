@@ -1679,6 +1679,24 @@ tr:hover td {
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
 }
 
+.collector-authorized-template-card {
+    display: grid;
+    gap: 13px;
+    margin: 16px 0;
+    padding: 16px;
+    border: 1px solid rgba(31, 122, 77, 0.14);
+    border-radius: 14px;
+    background: rgba(248, 253, 250, 0.92);
+    box-shadow: 0 10px 24px rgba(15, 80, 55, 0.06);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.collector-authorized-template-card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(31, 122, 77, 0.22);
+    box-shadow: 0 14px 30px rgba(15, 80, 55, 0.09);
+}
+
 .collector-source-config-header {
     display: flex;
     align-items: flex-start;
@@ -1708,6 +1726,65 @@ tr:hover td {
     font-size: 12px;
     font-weight: 900;
     padding: 6px 10px;
+}
+
+.collector-template-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.collector-template-info-grid > div {
+    padding: 11px 12px;
+    border: 1px solid rgba(31, 122, 77, 0.12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+.collector-template-info-grid strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #173f34;
+    font-size: 13px;
+}
+
+.collector-template-info-grid p {
+    margin: 0;
+    color: #526961;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.collector-authorized-template-code {
+    margin: 0;
+    padding: 12px;
+    overflow-x: auto;
+    border: 1px solid rgba(31, 122, 77, 0.12);
+    border-radius: 12px;
+    background: #ffffff;
+    color: #1f2d27;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.collector-authorized-template-code code {
+    white-space: pre;
+}
+
+.collector-authorized-template-notes {
+    margin: 0;
+    padding-left: 20px;
+    color: #526961;
+    font-size: 13px;
+    line-height: 1.75;
+}
+
+@media (max-width: 720px) {
+    .collector-template-info-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .collector-page #collectorSourceConfigText {
