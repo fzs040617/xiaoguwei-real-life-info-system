@@ -264,14 +264,83 @@ def keyword_list(keyword: Optional[str]) -> List[str]:
     return parts
 
 
+def split_source_filter_keywords(value: Optional[str]) -> List[str]:
+    text = (value or "").strip()
+    if not text:
+        return []
+    return [chunk.strip() for chunk in re.split(r"[\s,，、;；]+", text) if chunk.strip()]
+
+
+def dedupe_keywords(keywords: Iterable[str]) -> List[str]:
+    seen = set()
+    values = []
+    for keyword in keywords:
+        value = str(keyword or "").strip()
+        if not value:
+            continue
+        key = value.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        values.append(value)
+    return values
+
+
+def parse_source_filters(notes: Optional[str]) -> Dict[str, List[str]]:
+    text = safe_text(notes, 5000)
+    if not text:
+        return {"include": [], "exclude": []}
+
+    include_labels = [
+        "\u5173\u952e\u8bcd",
+        "\u5173\u952e\u5b57",
+        "include",
+        "include_keywords",
+    ]
+    exclude_labels = [
+        "\u6392\u9664\u5173\u952e\u8bcd",
+        "\u6392\u9664",
+        "exclude",
+        "exclude_keywords",
+    ]
+    all_labels = sorted([*include_labels, *exclude_labels], key=len, reverse=True)
+    marker = "|".join(re.escape(label) for label in all_labels)
+
+    def collect(labels: List[str]) -> List[str]:
+        label_pattern = "|".join(re.escape(label) for label in labels)
+        values: List[str] = []
+        pattern = re.compile(
+            rf"(?:^|[\r\n;；])\s*(?:{label_pattern})\s*[:：]\s*(.+?)(?=(?:[\r\n;；]\s*(?:{marker})\s*[:：])|$)",
+            re.I | re.S,
+        )
+        for match in pattern.finditer(text):
+            values.extend(split_source_filter_keywords(match.group(1)))
+        return dedupe_keywords(values)
+
+    return {
+        "include": collect(include_labels),
+        "exclude": collect(exclude_labels),
+    }
+
+
+def source_filters_for(source: Dict[str, Any]) -> Dict[str, List[str]]:
+    filters = parse_source_filters(source.get("notes"))
+    filters["include"] = dedupe_keywords([*keyword_list(source.get("keyword")), *filters["include"]])
+    return filters
+
+
+def collector_item_search_text(item: Dict[str, Any]) -> str:
+    return " ".join(
+        str(item.get(key) or "")
+        for key in ["title", "summary", "url", "raw_text", "platform"]
+    ).lower()
+
+
 def item_matches_keywords(item: Dict[str, Any], keywords: Iterable[str]) -> bool:
     keyword_values = [keyword.lower() for keyword in keywords if str(keyword or "").strip()]
     if not keyword_values:
         return True
-    combined = " ".join(
-        str(item.get(key) or "")
-        for key in ["title", "summary", "url", "raw_text"]
-    ).lower()
+    combined = collector_item_search_text(item)
     return any(keyword in combined for keyword in keyword_values)
 
 
@@ -279,11 +348,19 @@ def matched_keywords_for_item(item: Dict[str, Any], keywords: Iterable[str]) -> 
     keyword_values = [str(keyword or "").strip() for keyword in keywords if str(keyword or "").strip()]
     if not keyword_values:
         return []
-    combined = " ".join(
-        str(item.get(key) or "")
-        for key in ["title", "summary", "url", "raw_text"]
-    ).lower()
+    combined = collector_item_search_text(item)
     return [keyword for keyword in keyword_values if keyword.lower() in combined]
+
+
+def passes_source_filters(item: Dict[str, Any], filters: Dict[str, List[str]]) -> bool:
+    include_keywords = filters.get("include") or []
+    exclude_keywords = filters.get("exclude") or []
+    combined = collector_item_search_text(item)
+    if exclude_keywords and any(keyword.lower() in combined for keyword in exclude_keywords):
+        return False
+    if include_keywords and not any(keyword.lower() in combined for keyword in include_keywords):
+        return False
+    return True
 
 
 def request_source(url: str) -> requests.Response:
@@ -991,16 +1068,19 @@ def fetch_source_items(source: Dict[str, Any]) -> List[Dict[str, Any]]:
     raise ValueError("unsupported source_type")
 
 
-def save_items(source: Dict[str, Any], items: List[Dict[str, Any]]) -> int:
-    source_keywords = keyword_list(source.get("keyword"))
+def save_items(source: Dict[str, Any], items: List[Dict[str, Any]]) -> Dict[str, int]:
+    source_filters = source_filters_for(source)
     fetched_at = now_text()
     inserted = 0
+    filtered = 0
 
     with get_connection() as conn:
         for item in items:
             if inserted >= MAX_ITEMS_PER_SOURCE:
                 break
-            if not item_matches_keywords(item, source_keywords):
+            item.setdefault("platform", source.get("platform") or "")
+            if not passes_source_filters(item, source_filters):
+                filtered += 1
                 continue
             item["raw_hash"] = raw_hash_for(item)
             try:
@@ -1027,7 +1107,7 @@ def save_items(source: Dict[str, Any], items: List[Dict[str, Any]]) -> int:
             except sqlite3.IntegrityError:
                 continue
         conn.commit()
-    return inserted
+    return {"inserted": inserted, "filtered": filtered}
 
 
 def title_summary_hash_for(item: Dict[str, Any]) -> str:
@@ -1177,14 +1257,16 @@ def preview_source(source_id: int) -> Dict[str, Any]:
             "data": [],
         }
 
-    keywords = keyword_list(source.get("keyword"))
+    source_filters = source_filters_for(source)
+    include_keywords = source_filters.get("include") or []
     preview_items = []
     matched_count = 0
 
     with get_connection() as conn:
         for item in items:
-            matched_keywords = matched_keywords_for_item(item, keywords)
-            matched = item_matches_keywords(item, keywords)
+            item.setdefault("platform", source.get("platform") or "")
+            matched_keywords = matched_keywords_for_item(item, include_keywords)
+            matched = passes_source_filters(item, source_filters)
             if matched:
                 matched_count += 1
             item["raw_hash"] = raw_hash_for(item)
@@ -1372,16 +1454,19 @@ def run_source(source_id: int) -> Dict[str, Any]:
     started_at = now_text()
     try:
         items = fetch_source_items(source)
-        inserted = save_items(source, items)
+        save_result = save_items(source, items)
+        inserted = save_result["inserted"]
+        filtered = save_result["filtered"]
         status = "success"
-        error = ""
+        error = f"关键词筛选跳过 {filtered} 条" if filtered else ""
     except Exception as exc:
         inserted = 0
+        filtered = 0
         status = "failed"
         error = str(exc)
 
     run = record_run(source_id, status, started_at, inserted, error)
-    return {"source": source, "run": run}
+    return {"source": source, "run": run, "filtered_items": filtered}
 
 
 def enabled_sources() -> List[Dict[str, Any]]:
@@ -1424,6 +1509,7 @@ def run_all_enabled_sources() -> Dict[str, Any]:
     success_count = sum(1 for result in results if result["run"]["status"] == "success")
     failed_count = sum(1 for result in results if result["run"]["status"] == "failed")
     item_count = sum(result["run"]["item_count"] for result in results)
+    filtered_items = sum(int(result.get("filtered_items") or 0) for result in results)
 
     return {
         "message": "外部平台采集任务执行完成",
@@ -1431,6 +1517,7 @@ def run_all_enabled_sources() -> Dict[str, Any]:
         "success_count": success_count,
         "failed_count": failed_count,
         "item_count": item_count,
+        "filtered_items": filtered_items,
         "results": results,
     }
 

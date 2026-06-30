@@ -1784,6 +1784,28 @@ tr:hover td {
     line-height: 1.75;
 }
 
+.collector-keyword-guide {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid rgba(31, 122, 77, 0.12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.74);
+    box-shadow: 0 8px 18px rgba(15, 80, 55, 0.05);
+}
+
+.collector-keyword-guide strong {
+    color: #173f34;
+    font-size: 13px;
+}
+
+.collector-keyword-guide p {
+    margin: 0;
+    color: #526961;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
 @media (max-width: 720px) {
     .collector-template-info-grid {
         grid-template-columns: 1fr;
