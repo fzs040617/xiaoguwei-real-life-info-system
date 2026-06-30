@@ -413,8 +413,6 @@ def normalize_authorized_platform_row(row: Dict[str, Any], source: Dict[str, Any
         first_authorized_value(row, ["source_note", "notes", "note", "来源说明", "说明", "备注"]),
         500,
     )
-    if is_meaningful_manual_value(source_note):
-        summary = compact_text([summary, f"来源说明：{source_note}"], 1000)
 
     published_at = clean_manual_import_text(
         first_authorized_value(row, ["published_at", "published", "date", "created_at", "发布时间", "发布日期"]),
@@ -432,6 +430,7 @@ def normalize_authorized_platform_row(row: Dict[str, Any], source: Dict[str, Any
         "platform": platform,
         "raw_json": raw_json,
         "raw_text": compact_text([title, summary, source_note], 4000),
+        "source_note": source_note,
     }
 
 

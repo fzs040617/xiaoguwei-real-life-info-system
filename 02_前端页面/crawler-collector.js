@@ -1969,6 +1969,21 @@ function collectorRunStatusClass(status) {
     return "unknown";
 }
 
+function cleanCollectorItemSummaryForDisplay(value) {
+    let text = String(value || "").replace(/\s+/g, " ").trim();
+    if (!text) {
+        return "";
+    }
+    for (let index = 0; index < 3; index += 1) {
+        const cleaned = text.replace(/(?:\s|　)*(?:来源说明|说明|备注)\s*[：:]\s*[^。！？!?；;\n\r]+(?:[。！？!?；;])?\s*$/, "").trim();
+        if (cleaned === text) {
+            break;
+        }
+        text = cleaned;
+    }
+    return text;
+}
+
 function compactCollectorRunError(errorMessage) {
     const value = String(errorMessage || "").replace(/\s+/g, " ").trim();
     if (value.length <= 90) return value;
@@ -2053,7 +2068,7 @@ function renderCollectorPreview(result, sourceId = null) {
                         <strong>${collectorEscapeHtml(item.title || "未命名候选")}</strong>
                     </div>
                     <div class="target-url">${item.url ? `<a href="${collectorEscapeAttribute(item.url)}" target="_blank" rel="noopener noreferrer">${collectorEscapeHtml(item.url)}</a>` : "无链接"}</div>
-                    <div class="summary">${collectorEscapeHtml(item.summary || "暂无摘要")}</div>
+                    <div class="summary">${collectorEscapeHtml(cleanCollectorItemSummaryForDisplay(item.summary) || "暂无摘要")}</div>
                     <div class="notice">命中关键词：${collectorEscapeHtml((item.matched_keywords || []).join("、") || "无；空关键词源会按公开结果预览")}</div>
                 </div>
             `).join("")}
@@ -2259,7 +2274,7 @@ function renderCollectorItems(items) {
                 <strong>${collectorEscapeHtml(item.title || "未命名条目")}</strong>
             </div>
             <div class="target-url">${item.url ? `<a href="${collectorEscapeAttribute(item.url)}" target="_blank" rel="noopener noreferrer">${collectorEscapeHtml(item.url)}</a>` : "无链接"}</div>
-            <div class="summary">${collectorEscapeHtml(item.summary || "暂无摘要")}</div>
+            <div class="summary">${collectorEscapeHtml(cleanCollectorItemSummaryForDisplay(item.summary) || "暂无摘要")}</div>
             <div class="notice collector-item-source">${renderCollectorItemSource(item)} · 发布时间：${collectorEscapeHtml(item.published_at || "-")} · 抓取时间：${collectorEscapeHtml(item.fetched_at || "-")}</div>
             ${renderCollectorItemActions(item)}
         </div>

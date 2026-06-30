@@ -48,6 +48,7 @@ async function loadClueDetail() {
         const externalClue = isDetailExternalClue(item);
         const statusTip = getDetailReviewTip(item);
         const cleanedSummary = getDisplaySummary(item.summary);
+        const displaySourceNote = getDisplaySourceNote(item, item.summary);
         const displayTitle = getClueDetailTitle(item, cleanedSummary);
         const displaySourcePlatform = getDisplaySourcePlatform(item.source_platform);
         const displaySourceUrl = getDisplaySourceUrl(item.source_url);
@@ -69,6 +70,7 @@ async function loadClueDetail() {
                     <div><strong>分类：</strong>${escapeHtml(item.category || "未分类")}</div>
                     <div><strong>来源平台：</strong>${escapeHtml(displaySourcePlatform)}</div>
                     <div><strong>来源链接：</strong>${displaySourceUrl ? `<a href="${escapeAttr(displaySourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(displaySourceUrl)}</a>` : "暂无公开链接"}</div>
+                    ${displaySourceNote ? `<div><strong>来源说明：</strong>${escapeHtml(displaySourceNote)}</div>` : ""}
                     <div><strong>创建时间：</strong>${escapeHtml(item.created_at || "未知")}</div>
                 </div>
 
@@ -302,6 +304,23 @@ function cleanImportedText(value) {
     return text;
 }
 
+function splitSourceNoteFromSummary(value) {
+    const text = normalizeDetailText(value);
+    if (!text) {
+        return { summary: "", sourceNote: "" };
+    }
+
+    const match = text.match(/(?:\s|　)*(来源说明|说明|备注)\s*[：:]\s*([^。！？!?；;\n\r]+)(?:[。！？!?；;])?\s*$/);
+    if (!match) {
+        return { summary: text, sourceNote: "" };
+    }
+
+    return {
+        summary: text.slice(0, match.index).trim(),
+        sourceNote: normalizeDetailText(match[2])
+    };
+}
+
 function getClueDetailTitle(item, cleanedSummary) {
     const rawTitle = normalizeDetailText(item.title);
 
@@ -326,8 +345,26 @@ function getClueDetailTitle(item, cleanedSummary) {
 }
 
 function getDisplaySummary(value) {
-    const cleaned = cleanImportedText(value);
+    const split = splitSourceNoteFromSummary(value);
+    const cleaned = cleanImportedText(split.summary);
     return isMeaningfulDetailValue(cleaned) ? cleaned : "";
+}
+
+function getDisplaySourceNote(item, summaryValue) {
+    const directNote = item && (
+        item.source_note ||
+        item.sourceNote ||
+        (item.metadata && item.metadata.source_note) ||
+        (item.raw && item.raw.source_note)
+    );
+    const cleanedDirectNote = cleanImportedText(directNote);
+    if (isMeaningfulDetailValue(cleanedDirectNote)) {
+        return cleanedDirectNote;
+    }
+
+    const split = splitSourceNoteFromSummary(summaryValue);
+    const cleanedSplitNote = cleanImportedText(split.sourceNote);
+    return isMeaningfulDetailValue(cleanedSplitNote) ? cleanedSplitNote : "";
 }
 
 function getDisplaySourcePlatform(value) {

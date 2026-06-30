@@ -55,6 +55,22 @@ app.add_middleware(
 
 scheduler = None
 
+SOURCE_NOTE_SUFFIX_PATTERN = re.compile(
+    r"(?:\s|　)*(?:来源说明|说明|备注)\s*[：:]\s*[^。！？!?；;\n\r]+(?:[。！？!?；;])?\s*$"
+)
+
+
+def strip_source_note_from_summary(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    for _ in range(3):
+        cleaned = SOURCE_NOTE_SUFFIX_PATTERN.sub("", text).strip()
+        if cleaned == text:
+            break
+        text = cleaned
+    return text
+
 
 @app.on_event("startup")
 def on_startup():
@@ -649,7 +665,7 @@ def collector_item_to_clue(
         category="外部线索",
         source_platform=(item.get("platform") or item.get("source_name") or "外部平台采集"),
         source_url=item.get("url") or "",
-        summary=item.get("summary") or "",
+        summary=strip_source_note_from_summary(item.get("summary")),
         status="待核验",
     )
 
