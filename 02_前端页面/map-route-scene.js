@@ -12,6 +12,8 @@
         routeUsage: new Map(),
         routesLoaded: false,
         routeLoadFailed: false,
+        dedupeKeepChoices: new Map(),
+        dedupeCopyMessage: "",
         pendingCreatedId: null,
         pendingFallback: false
     };
@@ -199,6 +201,40 @@
     };
     window.showRouteSceneModule = function (name) {
         showSceneModule("route", name || "overview");
+    };
+    window.setMapDedupeKeepPoint = function (groupKey, pointId) {
+        mapState.dedupeKeepChoices.set(String(groupKey), Number(pointId));
+        renderMapDedupeView();
+    };
+    window.copyMapDedupePlan = async function (groupKey) {
+        const textBox = document.getElementById(getMapDedupePlanId(groupKey));
+        if (!textBox) {
+            return;
+        }
+        const text = textBox.value || textBox.textContent || "";
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                textBox.focus();
+                textBox.select();
+                const copied = document.execCommand && document.execCommand("copy");
+                if (!copied) {
+                    throw new Error("clipboard unavailable");
+                }
+            }
+            mapState.dedupeCopyMessage = String(groupKey);
+            renderMapDedupeView();
+            window.setTimeout(() => {
+                if (mapState.dedupeCopyMessage === String(groupKey)) {
+                    mapState.dedupeCopyMessage = "";
+                    renderMapDedupeView();
+                }
+            }, 1800);
+        } catch (error) {
+            mapState.dedupeCopyMessage = `manual:${String(groupKey)}`;
+            renderMapDedupeView();
+        }
     };
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -623,6 +659,271 @@
             .toLowerCase()
             .replace(/\s+/g, "")
             .trim();
+    }
+
+    function renderMapDedupeGroup(group) {
+        const typeLabel = group.type === "strong" ? "强疑似重复" : "弱疑似重复";
+        const typeClass = group.type === "strong" ? "strong" : "weak";
+        const idsText = group.points.map(point => `#${Number(point.id)}`).join("、");
+        const selectedKeepId = mapState.dedupeKeepChoices.get(group.key) || Number(group.recommended.id);
+        const keepPoint = group.points.find(point => Number(point.id) === Number(selectedKeepId)) || group.recommended;
+        const duplicatePoints = group.points.filter(point => Number(point.id) !== Number(keepPoint.id));
+        const recommendationReason = getMapDedupeRecommendationReason(group, group.recommended);
+
+        return `
+            <div class="dedupe-group-card">
+                <div class="dedupe-group-header">
+                    <div>
+                        <span class="tag dedupe-type-${typeClass}">${typeLabel}</span>
+                        <h3>${escapeSceneHtml(group.name)}</h3>
+                        <p>涉及 ID：${escapeSceneHtml(idsText)}</p>
+                    </div>
+                    <div class="dedupe-recommend">
+                        <strong>推荐保留：地图点 #${Number(group.recommended.id)}</strong>
+                        <span>推荐理由：${escapeSceneHtml(recommendationReason)}。其它记录先人工核对，不自动合并。</span>
+                    </div>
+                </div>
+                <div class="scene-duplicate-note">本页只做识别、预览和人工治理入口，不自动删除、不自动合并、不修改路线 point_ids。</div>
+                <div class="dedupe-keep-selector">
+                    <div>
+                        <strong>选择保留记录</strong>
+                        <p>当前保留：地图点 #${Number(keepPoint.id)} · ${escapeSceneHtml(keepPoint.name || "未命名地点")}。待处理重复点：${duplicatePoints.map(point => `#${Number(point.id)}`).join("、") || "无"}。</p>
+                    </div>
+                    <div class="dedupe-keep-buttons">
+                        ${group.points.map(point => `
+                            <button class="small-button ${Number(point.id) === Number(keepPoint.id) ? "" : "btn-secondary"}" type="button" onclick="setMapDedupeKeepPoint('${escapeSceneJs(group.key)}', ${Number(point.id)})">设为保留 #${Number(point.id)}</button>
+                        `).join("")}
+                    </div>
+                </div>
+                <div class="dedupe-point-list">
+                    ${group.points.map(point => renderMapDedupePoint(point, Number(point.id) === Number(group.recommended.id))).join("")}
+                </div>
+                ${renderMapDedupeMergePreview(group, keepPoint)}
+                <div class="scene-preview-actions">
+                    <button class="small-button" type="button" onclick="showMapSceneModule('list')">打开地图中心地点列表</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function getMapDedupeRecommendationReason(group, recommended) {
+        const routeCounts = group.points.map(point => getMapPointRouteUsage(point.id).length);
+        const maxRouteCount = Math.max(...routeCounts);
+        const recommendedRouteCount = getMapPointRouteUsage(recommended.id).length;
+        if (recommendedRouteCount > 0 && recommendedRouteCount === maxRouteCount && routeCounts.filter(count => count === maxRouteCount).length === 1) {
+            return "被路线使用更多";
+        }
+
+        const knownTimes = group.points
+            .map(point => ({id: Number(point.id), time: Date.parse(point.created_at || "")}))
+            .filter(item => Number.isFinite(item.time))
+            .sort((a, b) => a.time - b.time || a.id - b.id);
+        if (knownTimes.length && knownTimes[0].id === Number(recommended.id)) {
+            return "创建时间较早";
+        }
+
+        return "ID 更小";
+    }
+
+    function renderMapDedupeMergePreview(group, keepPoint) {
+        const duplicatePoints = group.points.filter(point => Number(point.id) !== Number(keepPoint.id));
+        const routeImpacts = buildMapDedupeRouteImpacts(keepPoint, duplicatePoints);
+        const relationImpacts = buildMapDedupeRelationImpacts(keepPoint, duplicatePoints);
+        const planText = buildMapDedupePlanText(group, keepPoint, duplicatePoints, routeImpacts, relationImpacts);
+        const planId = getMapDedupePlanId(group.key);
+        const copyMessage = mapState.dedupeCopyMessage === group.key
+            ? "已复制合并处理方案"
+            : mapState.dedupeCopyMessage === `manual:${group.key}`
+                ? "浏览器不支持自动复制，请手动复制下方方案"
+                : "";
+
+        return `
+            <div class="dedupe-merge-preview">
+                <div class="scene-linked-point-head">
+                    <strong>安全合并预览</strong>
+                    <span class="tag warning">仅预览，不写入</span>
+                </div>
+                <div class="dedupe-preview-grid">
+                    <section class="dedupe-preview-section">
+                        <h4>保留地图点</h4>
+                        ${renderMapDedupePreviewPoint(keepPoint)}
+                    </section>
+                    <section class="dedupe-preview-section">
+                        <h4>待处理重复点</h4>
+                        ${duplicatePoints.length
+                            ? duplicatePoints.map(point => renderMapDedupePreviewPoint(point)).join("")
+                            : `<div class="scene-empty-state">暂无待处理重复点。</div>`}
+                    </section>
+                </div>
+                <section class="dedupe-preview-section">
+                    <h4>路线影响预览</h4>
+                    ${renderMapDedupeRouteImpacts(routeImpacts, duplicatePoints, keepPoint)}
+                </section>
+                <section class="dedupe-preview-section">
+                    <h4>关联信息影响</h4>
+                    ${relationImpacts.map(item => `<div class="scene-empty-state">${escapeSceneHtml(item)}</div>`).join("")}
+                </section>
+                <div class="dedupe-risk-note">本轮仅生成合并预览，不会修改数据库、不会删除地图点、不会自动修改 route.point_ids。合并前请人工确认路线、真实库和线索关联。</div>
+                <section class="dedupe-preview-section">
+                    <div class="scene-linked-point-head">
+                        <h4>处理建议</h4>
+                        <button class="small-button" type="button" onclick="copyMapDedupePlan('${escapeSceneJs(group.key)}')">复制处理方案</button>
+                    </div>
+                    ${copyMessage ? `<div class="dedupe-copy-status">${escapeSceneHtml(copyMessage)}</div>` : ""}
+                    <textarea id="${planId}" class="dedupe-plan-text" readonly>${escapeSceneHtml(planText)}</textarea>
+                </section>
+            </div>
+        `;
+    }
+
+    function renderMapDedupePreviewPoint(point) {
+        const routes = getMapPointRouteUsage(point.id);
+        return `
+            <div class="dedupe-preview-point">
+                <strong>地图点 #${Number(point.id)} · ${escapeSceneHtml(point.name || "未命名地点")}</strong>
+                <div class="scene-point-meta">
+                    <span>ID：${Number(point.id)}</span>
+                    <span>地址：${escapeSceneHtml(point.address || "暂无地址/区域")}</span>
+                    <span>来源：${escapeSceneHtml(point.source || "未知来源")}</span>
+                    <span>关联：${escapeSceneHtml(formatMapPointRelation(point))}</span>
+                    <span>路线使用：${mapState.routeLoadFailed ? "暂不可用" : `${routes.length} 条`}</span>
+                </div>
+                ${renderMapDedupeRouteLinks(routes)}
+            </div>
+        `;
+    }
+
+    function buildMapDedupeRouteImpacts(keepPoint, duplicatePoints) {
+        const keepId = Number(keepPoint.id);
+        const duplicateIds = duplicatePoints.map(point => Number(point.id)).filter(Boolean);
+        const routeMap = new Map();
+        duplicateIds.forEach(pointId => {
+            getMapPointRouteUsage(pointId).forEach(route => {
+                routeMap.set(Number(route.id), route);
+            });
+        });
+
+        return [...routeMap.values()].map(route => {
+            const currentIds = getRoutePointIdsForPreview(route);
+            const suggestedIds = previewReplaceRoutePointIds(currentIds, keepId, duplicateIds);
+            return {
+                route,
+                currentIds,
+                suggestedIds,
+                changed: currentIds.join(",") !== suggestedIds.join(",")
+            };
+        }).filter(item => item.changed);
+    }
+
+    function getRoutePointIdsForPreview(route) {
+        const ids = parseRoutePointIds(route.point_ids);
+        if (ids.length) {
+            return ids;
+        }
+        if (Array.isArray(route.points)) {
+            return route.points
+                .map(point => Number(point.id || point.point_id || point))
+                .filter(Boolean);
+        }
+        return [];
+    }
+
+    function previewReplaceRoutePointIds(currentIds, keepId, duplicateIds) {
+        const duplicateIdSet = new Set(duplicateIds.map(Number));
+        const seen = new Set();
+        const result = [];
+        currentIds.forEach(id => {
+            const normalizedId = Number(id);
+            if (!normalizedId) {
+                return;
+            }
+            const nextId = duplicateIdSet.has(normalizedId) ? Number(keepId) : normalizedId;
+            if (!seen.has(nextId)) {
+                seen.add(nextId);
+                result.push(nextId);
+            }
+        });
+        return result;
+    }
+
+    function renderMapDedupeRouteImpacts(routeImpacts, duplicatePoints, keepPoint) {
+        if (mapState.routeLoadFailed) {
+            return `<div class="scene-empty-state">路线使用情况暂不可用，无法生成路线 point_ids 预览。</div>`;
+        }
+        if (!routeImpacts.length) {
+            return `<div class="scene-empty-state">待处理重复点暂未被路线使用，暂无 route.point_ids 替换建议。</div>`;
+        }
+        const duplicateIdsText = duplicatePoints.map(point => `#${Number(point.id)}`).join("、");
+        return `
+            <div class="dedupe-route-impact-list">
+                ${routeImpacts.map(item => `
+                    <div class="dedupe-route-impact">
+                        <strong>路线 #${Number(item.route.id)}：${escapeSceneHtml(item.route.name || "未命名路线")}</strong>
+                        <div class="scene-point-meta">
+                            <span>当前 point_ids：${escapeSceneHtml(item.currentIds.join(",") || "空")}</span>
+                            <span>建议替换后：${escapeSceneHtml(item.suggestedIds.join(",") || "空")}</span>
+                            <span>说明：将 ${escapeSceneHtml(duplicateIdsText)} 替换为 #${Number(keepPoint.id)}，并去除重复 ID。</span>
+                        </div>
+                        <button class="small-button btn-secondary" type="button" onclick="location.href='route-detail.html?id=${Number(item.route.id)}'">查看路线详情 #${Number(item.route.id)}</button>
+                    </div>
+                `).join("")}
+            </div>
+        `;
+    }
+
+    function buildMapDedupeRelationImpacts(keepPoint, duplicatePoints) {
+        const keepRelation = getMapPointRelationKey(keepPoint);
+        const duplicateRelations = duplicatePoints
+            .map(point => ({point, key: getMapPointRelationKey(point)}))
+            .filter(item => item.key);
+        if (!duplicateRelations.length) {
+            return ["待处理重复点未发现真实库 / 线索关联。"];
+        }
+        const impacts = [];
+        duplicateRelations.forEach(item => {
+            if (!keepRelation) {
+                impacts.push(`地图点 #${Number(item.point.id)} 关联 ${formatMapPointRelation(item.point)}，保留点暂无关联，建议人工迁移关联。`);
+            } else if (keepRelation !== item.key) {
+                impacts.push(`保留点关联 ${formatMapPointRelation(keepPoint)}，地图点 #${Number(item.point.id)} 关联 ${formatMapPointRelation(item.point)}，存在多来源关联，需人工确认。`);
+            }
+        });
+        return impacts.length ? impacts : ["保留点已覆盖相同真实库 / 线索关联，仍建议人工核对后再处理重复记录。"];
+    }
+
+    function formatMapPointRelation(point) {
+        if (!point.target_type || !point.target_id) {
+            return "暂未关联";
+        }
+        return `${getRelatedTargetLabel(point.target_type)} #${point.target_id}`;
+    }
+
+    function getMapPointRelationKey(point) {
+        if (!point.target_type || !point.target_id) {
+            return "";
+        }
+        return `${point.target_type}:${point.target_id}`;
+    }
+
+    function buildMapDedupePlanText(group, keepPoint, duplicatePoints, routeImpacts, relationImpacts) {
+        const duplicateText = duplicatePoints.map(point => `#${Number(point.id)}`).join("、") || "无";
+        const routeLines = routeImpacts.length
+            ? routeImpacts.map(item => `建议将路线 #${Number(item.route.id)} 的 point_ids 从 ${item.currentIds.join(",") || "空"} 调整为 ${item.suggestedIds.join(",") || "空"}`)
+            : ["待处理重复点暂未影响路线 point_ids。"];
+        return [
+            "重复地点合并建议：",
+            `重复组：${group.name}`,
+            `保留地图点 #${Number(keepPoint.id)}：${keepPoint.name || "未命名地点"}`,
+            `待处理重复点：${duplicateText}`,
+            ...routeLines,
+            "关联影响：",
+            ...relationImpacts.map(item => `- ${item}`),
+            "本轮仅生成预览，不会修改数据库、不会删除地图点、不会自动修改 route.point_ids。",
+            "建议人工检查重复点的真实库 / 线索关联后，再归档或删除重复记录。"
+        ].join("\n");
+    }
+
+    function getMapDedupePlanId(groupKey) {
+        return `mapDedupePlan-${String(groupKey).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
     }
 
     function renderRouteStats(routes) {
