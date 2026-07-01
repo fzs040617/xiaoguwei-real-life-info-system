@@ -33,8 +33,8 @@
 
     <div class="page-hero ops-hero route-hero">
         <div class="hero-kicker">路线信息工作台</div>
-        <h2>路线中心</h2>
-        <p>查看和维护路线、站点、路径相关信息，把生活地点串联成可核验、可复用的校园动线。</p>
+        <h2>生活场景路线</h2>
+        <p>把新生办事、吃饭、就医、通勤、夜间安全、快递取件等日常需求整理成可复用的路线建议卡片。</p>
         <div class="hero-badges">
             <span class="hero-badge">路线信息</span>
             <span class="hero-badge">路径规划</span>
@@ -43,8 +43,47 @@
         </div>
     </div>
 
+    <nav class="workspace-module-tabs route-scene-tabs" aria-label="路线中心二级模块">
+        <button class="workspace-module-tab active" type="button" data-route-scene-tab="overview" aria-pressed="true">场景总览</button>
+        <button class="workspace-module-tab" type="button" data-route-scene-tab="create" aria-pressed="false">新建路线</button>
+        <button class="workspace-module-tab" type="button" data-route-scene-tab="list" aria-pressed="false">路线列表</button>
+        <button class="workspace-module-tab" type="button" data-route-scene-tab="filter" aria-pressed="false">筛选管理</button>
+        <span id="routeSceneTabMessage" class="scene-tab-message" aria-live="polite"></span>
+    </nav>
+
+    <section class="scene-panel route-scene-panel" data-route-scene-module="overview" aria-label="生活场景路线筛选">
+        <div class="scene-panel-header">
+            <div>
+                <h2>推荐场景筛选</h2>
+                <p>本轮不做导航算法；没有完整路径数据时，也作为生活路线建议卡片展示，后续可补充地图点和注意事项。</p>
+            </div>
+            <span>路线 MVP</span>
+        </div>
+        <div class="scene-route-suggestions">
+            <span>新生办事</span>
+            <span>夜间安全</span>
+            <span>就医</span>
+            <span>吃饭</span>
+            <span>通勤</span>
+            <span>快递取件</span>
+        </div>
+        <div id="routeSceneStats" class="scene-stats-grid" aria-live="polite"></div>
+        <div id="routeSceneFilters" class="scene-filter-row">
+            <button class="scene-chip active" type="button" onclick="setRouteScene('全部')">全部</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('新生办事路线')">新生办事</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('吃饭路线')">吃饭</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('就医路线')">就医</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('通勤路线')">通勤</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('夜间安全路线')">夜间安全</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('快递取件路线')">快递取件</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('校园服务路线')">校园服务</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('周末 citywalk 路线')">周末 citywalk</button>
+            <button class="scene-chip" type="button" onclick="setRouteScene('政务办事路线')">政务办事</button>
+        </div>
+    </section>
+
     <div class="ops-workbench ops-workbench-route">
-        <main class="ops-main">
+        <main class="ops-main" data-route-scene-module="create" hidden>
     <div class="box ops-panel route-create-panel">
         <h2>新建路线</h2>
         <p class="notice">
@@ -122,7 +161,7 @@
     </div>
 
         </main>
-        <aside class="ops-aside">
+        <aside class="ops-aside" data-route-scene-module="filter" hidden>
     <div class="box ops-panel">
         <h2>路线筛选</h2>
 
@@ -149,8 +188,8 @@
         </aside>
     </div>
 
-    <div class="section ops-panel ops-list-panel">
-        <h2>路线列表</h2>
+    <div class="section ops-panel ops-list-panel" data-route-scene-module="list" hidden>
+        <h2>生活路线建议列表</h2>
         <div id="routeList" class="empty">正在加载路线...</div>
     </div>
 
@@ -172,6 +211,7 @@
 <script src="history-auto.js?v=19"></script>
 <script src="history-badge.js?v=17"></script>
 <script src="map-route-detail-link.js?v=20"></script>
+<script src="map-route-scene.js?v=1"></script>
 <script src="global-loader.js?v=62"></script>
 </body>
 </html>

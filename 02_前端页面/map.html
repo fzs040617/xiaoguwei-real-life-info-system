@@ -32,8 +32,8 @@
 <div class="container ops-container">
     <div class="page-hero ops-hero map-hero">
         <div class="hero-kicker">生活地图工作台</div>
-        <h2>地图中心</h2>
-        <p>查看线索、地点与生活信息的空间分布，维护可追溯的地点记录和地图点状态。</p>
+        <h2>生活场景地图</h2>
+        <p>把小谷围、广州大学城周边的吃饭、交通、政务、医疗、活动等信息整理成可核验的空间地点卡片。</p>
         <div class="hero-badges">
             <span class="hero-badge">地图查看</span>
             <span class="hero-badge">地点线索</span>
@@ -42,8 +42,42 @@
         </div>
     </div>
 
+    <nav class="workspace-module-tabs map-scene-tabs" aria-label="地图中心二级模块">
+        <button class="workspace-module-tab active" type="button" data-map-scene-tab="overview" aria-pressed="true">场景总览</button>
+        <button class="workspace-module-tab" type="button" data-map-scene-tab="create" aria-pressed="false">智能添加</button>
+        <button class="workspace-module-tab" type="button" data-map-scene-tab="list" aria-pressed="false">地点列表</button>
+        <button class="workspace-module-tab" type="button" data-map-scene-tab="filter" aria-pressed="false">筛选管理</button>
+        <span id="mapSceneTabMessage" class="scene-tab-message" aria-live="polite"></span>
+    </nav>
+
+    <section class="scene-panel map-scene-panel" data-map-scene-module="overview" aria-label="生活场景地图筛选">
+        <div class="scene-panel-header">
+            <div>
+                <h2>生活场景筛选</h2>
+                <p>没有坐标的记录也会作为地点信息卡片展示；场景由地点名称、分类、区域和说明自动推断，不写回数据库。</p>
+            </div>
+            <span>空间 MVP</span>
+        </div>
+        <div id="mapSceneStats" class="scene-stats-grid" aria-live="polite"></div>
+        <div id="mapSceneFilters" class="scene-filter-row">
+            <button class="scene-chip active" type="button" onclick="setMapScene('全部')">全部</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('吃饭')">吃饭</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('交通')">交通</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('宿舍')">宿舍</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('维修')">维修</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('医疗')">医疗</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('快递')">快递</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('活动')">活动</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('政务')">政务</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('学习')">学习</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('购物')">购物</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('运动')">运动</button>
+            <button class="scene-chip" type="button" onclick="setMapScene('其他')">其他</button>
+        </div>
+    </section>
+
     <div class="ops-workbench ops-workbench-map">
-        <main class="ops-main">
+        <main class="ops-main" data-map-scene-module="create" hidden>
     <div class="box ops-panel map-smart-panel">
         <h2>智能识别添加地图点</h2>
         <p class="notice">
@@ -147,7 +181,7 @@
     </div>
 
         </main>
-        <aside class="ops-aside">
+        <aside class="ops-aside" data-map-scene-module="filter" hidden>
     <div class="box ops-panel">
         <h2>地图点筛选</h2>
 
@@ -176,8 +210,8 @@
         </aside>
     </div>
 
-    <div class="section ops-panel ops-list-panel">
-        <h2>地图点列表</h2>
+    <div class="section ops-panel ops-list-panel" data-map-scene-module="list" hidden>
+        <h2>生活场景地点列表</h2>
         <div id="mapPointList" class="empty">正在加载地图点...</div>
     </div>
 
@@ -197,6 +231,7 @@
 <script src="history-auto.js?v=19"></script>
 <script src="history-badge.js?v=17"></script>
 <script src="map-route-detail-link.js?v=20"></script>
+<script src="map-route-scene.js?v=1"></script>
 <script src="global-loader.js?v=62"></script>
 </body>
 </html>

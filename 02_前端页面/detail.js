@@ -79,7 +79,11 @@ async function loadClueDetail() {
                     <p>${escapeHtml(cleanedSummary || "暂无简介，等待用户补充。")}</p>
                 </div>
 
+                ${renderSpatialOrganizerHint(item, "clue", cleanedSummary)}
+
                 <div class="clue-review-tip ${getDetailReviewTipClass(item)}">${escapeHtml(statusTip)}</div>
+
+                ${renderSpatialOrganizerHint(item, "verified", item.summary)}
 
                 <div class="action-row">
                     <div class="action-title">用户核验</div>
@@ -275,6 +279,55 @@ function getStatusTagClass(status) {
     if (status.includes("不准确") || status.includes("过期") || status.includes("归档")) return "danger-tag";
     if (status.includes("已转入真实库")) return "tag";
     return "warning";
+}
+
+function renderSpatialOrganizerHint(item, type, displaySummary) {
+    const signals = inferSpatialSignals(item, displaySummary);
+    if (!signals.locationRelated && !signals.routeRelated) {
+        return "";
+    }
+
+    const targetLabel = type === "verified" ? "真实库信息" : "线索";
+    const mapText = signals.locationRelated
+        ? "这条信息可能包含地点，可在地图中心整理为空间点。"
+        : "如后续补充明确地点，可在地图中心整理为空间点。";
+    const routeText = signals.routeRelated
+        ? "这条信息可能包含出行路径，可在路线中心整理为生活路线。"
+        : "如后续补充起点、终点或途经点，可在路线中心整理为生活路线。";
+
+    return `
+        <div class="spatial-organizer-hint">
+            <strong>空间生活场景整理提示</strong>
+            <p>${targetLabel}可作为地图与路线中心的整理素材。本轮不自动生成地点或路线，请管理员人工核对后再补充。</p>
+            <div class="spatial-hint-actions">
+                <span>${escapeHtml(mapText)}</span>
+                <span>${escapeHtml(routeText)}</span>
+            </div>
+            <div class="spatial-hint-links">
+                <button class="small-button" onclick="location.href='map.html'">去地图中心整理</button>
+                <button class="small-button btn-secondary" onclick="location.href='route.html'">去路线中心整理</button>
+            </div>
+        </div>
+    `;
+}
+
+function inferSpatialSignals(item, displaySummary) {
+    const text = [
+        item && item.title,
+        item && item.category,
+        item && item.location,
+        item && item.source_platform,
+        displaySummary,
+        item && item.summary
+    ].map(value => String(value || "")).join(" ");
+
+    const locationPattern = /(小谷围|广州大学城|贝岗|南亭|北亭|穗石|官洲|地铁|公交|校车|食堂|宿舍|医院|药店|快递|驿站|街道|社区|政务|活动|讲座|店|馆|站|路|广场|中心)/;
+    const routePattern = /(路线|起点|终点|途经|经过|从.+到|步行|骑行|公交|地铁|通勤|citywalk|夜间|办事|取件|就医)/;
+
+    return {
+        locationRelated: locationPattern.test(text),
+        routeRelated: routePattern.test(text)
+    };
 }
 
 function isDetailExternalClue(item) {
