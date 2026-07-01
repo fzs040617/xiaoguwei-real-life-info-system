@@ -36,16 +36,16 @@
         <h2>生活场景路线</h2>
         <p>把新生办事、吃饭、就医、通勤、夜间安全、快递取件等日常需求整理成可复用的路线建议卡片。</p>
         <div class="hero-badges">
-            <span class="hero-badge">路线信息</span>
-            <span class="hero-badge">路径规划</span>
+            <span class="hero-badge">路线查看</span>
+            <span class="hero-badge">路线整理</span>
             <span class="hero-badge">生活动线</span>
-            <span class="hero-badge">人工维护</span>
+            <span class="hero-badge">人工核验</span>
         </div>
     </div>
 
     <nav class="workspace-module-tabs route-scene-tabs" aria-label="路线中心二级模块">
         <button class="workspace-module-tab active" type="button" data-route-scene-tab="overview" aria-pressed="true">场景总览</button>
-        <button class="workspace-module-tab" type="button" data-route-scene-tab="create" aria-pressed="false">新建路线</button>
+        <button class="workspace-module-tab" type="button" data-route-scene-tab="create" aria-pressed="false">新增路线</button>
         <button class="workspace-module-tab" type="button" data-route-scene-tab="list" aria-pressed="false">路线列表</button>
         <button class="workspace-module-tab" type="button" data-route-scene-tab="filter" aria-pressed="false">筛选管理</button>
         <span id="routeSceneTabMessage" class="scene-tab-message" aria-live="polite"></span>
@@ -80,6 +80,7 @@
             <button class="scene-chip" type="button" onclick="setRouteScene('周末 citywalk 路线')">周末 citywalk</button>
             <button class="scene-chip" type="button" onclick="setRouteScene('政务办事路线')">政务办事</button>
         </div>
+        <div id="routeOverviewPreview" class="scene-overview-grid" aria-live="polite"></div>
     </section>
 
     <div class="ops-workbench ops-workbench-route">
@@ -128,6 +129,7 @@
         <div class="form-row">
             <label>地图点 ID，用英文逗号分隔</label>
             <input id="routePointIds" placeholder="例如：1,2,3">
+            <p class="field-help">复用路线已有 point_ids 字段；列表和详情页会优先显示可查到的地图点名称，查不到时保留 ID。</p>
         </div>
 
         <div class="form-row">

@@ -35,8 +35,8 @@
         <h2>生活场景地图</h2>
         <p>把小谷围、广州大学城周边的吃饭、交通、政务、医疗、活动等信息整理成可核验的空间地点卡片。</p>
         <div class="hero-badges">
-            <span class="hero-badge">地图查看</span>
-            <span class="hero-badge">地点线索</span>
+            <span class="hero-badge">地点查看</span>
+            <span class="hero-badge">地点整理</span>
             <span class="hero-badge">空间分布</span>
             <span class="hero-badge">人工核验</span>
         </div>
@@ -44,7 +44,7 @@
 
     <nav class="workspace-module-tabs map-scene-tabs" aria-label="地图中心二级模块">
         <button class="workspace-module-tab active" type="button" data-map-scene-tab="overview" aria-pressed="true">场景总览</button>
-        <button class="workspace-module-tab" type="button" data-map-scene-tab="create" aria-pressed="false">智能添加</button>
+        <button class="workspace-module-tab" type="button" data-map-scene-tab="create" aria-pressed="false">新增地点</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="list" aria-pressed="false">地点列表</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="filter" aria-pressed="false">筛选管理</button>
         <span id="mapSceneTabMessage" class="scene-tab-message" aria-live="polite"></span>
@@ -74,6 +74,7 @@
             <button class="scene-chip" type="button" onclick="setMapScene('运动')">运动</button>
             <button class="scene-chip" type="button" onclick="setMapScene('其他')">其他</button>
         </div>
+        <div id="mapOverviewPreview" class="scene-overview-grid" aria-live="polite"></div>
     </section>
 
     <div class="ops-workbench ops-workbench-map">
@@ -152,18 +153,20 @@
             </select>
         </div>
 
-        <div class="form-row">
-            <label>关联对象类型，可为空</label>
+        <div class="form-row spatial-link-form-row">
+            <label>关联来源类型，可为空</label>
             <select id="mapTargetType">
                 <option value="">不关联</option>
+                <option value="verified">关联真实库信息</option>
                 <option value="clue">关联线索</option>
-                <option value="verified">关联真实库</option>
             </select>
+            <p class="field-help">复用地图点已有 target_type 字段，不新增关系表。</p>
         </div>
 
-        <div class="form-row">
-            <label>关联对象 ID，可为空</label>
-            <input id="mapTargetId" placeholder="例如：线索ID或真实库ID">
+        <div class="form-row spatial-link-form-row">
+            <label>关联来源 ID，可为空</label>
+            <input id="mapTargetId" placeholder="例如：真实库 ID 或线索 ID">
+            <p class="field-help">可在真实库详情页、线索详情页地址栏或列表中查看 ID。</p>
         </div>
 
         <div class="form-row">

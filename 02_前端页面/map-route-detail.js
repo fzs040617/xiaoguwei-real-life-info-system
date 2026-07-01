@@ -90,22 +90,19 @@ async function loadRouteDetail() {
     }
 
     try {
-        const response = await fetch(`${MAP_ROUTE_DETAIL_API}/routes/${id}`);
+        const [response, pointResponse] = await Promise.all([
+            fetch(`${MAP_ROUTE_DETAIL_API}/routes/${id}`),
+            fetch(`${MAP_ROUTE_DETAIL_API}/map-points`)
+        ]);
         const item = await response.json();
+        const pointData = await pointResponse.json();
 
         if (!response.ok) {
             box.innerHTML = `<div class="empty">路线加载失败：${JSON.stringify(item)}</div>`;
             return;
         }
 
-        const pointsHtml = (item.points || []).map(point => `
-            <div class="target-item">
-                <span class="tag">${escapeDetailHtml(point.category || "未分类")}</span>
-                <strong>${escapeDetailHtml(point.name)}</strong>
-                <div>地址：${escapeDetailHtml(point.address || "暂无地址")}</div>
-                <button class="small-button" onclick="location.href='map-detail.html?id=${point.id}'">查看地图点详情</button>
-            </div>
-        `).join("");
+        const pointsHtml = buildRouteDetailInlinePoints(item, pointResponse.ok ? (pointData.data || []) : []);
 
         box.innerHTML = `
             <div class="card">
@@ -223,6 +220,118 @@ function buildRelatedObjectButton(item) {
     }
 
     return "";
+}
+
+function buildRouteDetailInlinePoints(route, allMapPoints) {
+    const points = buildRouteDetailInlinePointItems(route, allMapPoints);
+    const duplicateNote = hasRouteDetailInlineSameName(points)
+        ? `<div class="scene-duplicate-note">存在同名地点，请根据地图点 ID 区分；如为误建，可后续在地图中心清理重复地点。</div>`
+        : "";
+    return `${duplicateNote}${points.map(point => `
+        <div class="target-item scene-linked-point-card">
+            <div class="scene-linked-point-head">
+                <strong>地图点 #${Number(point.id)} · ${escapeDetailHtml(point.name || "未命名地图点")}</strong>
+                <span class="scene-id-badge">#${Number(point.id)}</span>
+            </div>
+            <div class="scene-point-meta">
+                <span>ID：${Number(point.id)}</span>
+                <span>分类：${escapeDetailHtml(point.category || "未分类")}</span>
+                <span>地址：${escapeDetailHtml(point.address || "暂无地址/区域")}</span>
+                <span>来源：${escapeDetailHtml(point.source || "未知来源")}</span>
+            </div>
+            ${point.missing ? `<div>未找到对应地图点，可能已删除或尚未创建。</div>` : ""}
+            <button class="small-button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">${point.missing ? "尝试打开地图点详情" : "查看地图点详情"} #${Number(point.id)}</button>
+        </div>
+    `).join("")}`;
+}
+
+function buildRouteDetailInlinePointItems(route, allMapPoints) {
+    const allPointMap = new Map();
+    (allMapPoints || []).forEach(point => {
+        const id = Number(point && point.id);
+        if (id) {
+            allPointMap.set(id, point);
+        }
+    });
+    const byId = new Map();
+    (route.points || []).forEach(point => {
+        const id = Number(point && point.id);
+        if (id && !byId.has(id)) {
+            const fullPoint = {...(allPointMap.get(id) || {}), ...point};
+            byId.set(id, {
+                id,
+                name: fullPoint.name || "",
+                category: fullPoint.category || "",
+                address: fullPoint.address || "",
+                source: fullPoint.source || "",
+                missing: false
+            });
+        }
+    });
+    parseRouteDetailInlinePointIds(route.point_ids).forEach(id => {
+        if (!byId.has(id)) {
+            const point = allPointMap.get(id);
+            byId.set(id, {
+                id,
+                name: point ? (point.name || "") : "",
+                category: point ? (point.category || "") : "",
+                address: point ? (point.address || "") : "",
+                source: point ? (point.source || "") : "",
+                missing: !point
+            });
+        }
+    });
+    return Array.from(byId.values());
+}
+
+function parseRouteDetailInlinePointIds(value) {
+    if (!value) {
+        return [];
+    }
+    if (Array.isArray(value)) {
+        return uniqueRouteDetailInlinePointIds(value);
+    }
+    const text = String(value || "").trim();
+    if (!text) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+            return uniqueRouteDetailInlinePointIds(parsed);
+        }
+    } catch (error) {
+        // Fall back to separator parsing.
+    }
+    return uniqueRouteDetailInlinePointIds(text.replace(/[，、;；\s]+/g, ",").split(","));
+}
+
+function uniqueRouteDetailInlinePointIds(values) {
+    const seen = new Set();
+    const result = [];
+    values.forEach(value => {
+        const id = Number(String(value || "").trim());
+        if (Number.isInteger(id) && id > 0 && !seen.has(id)) {
+            seen.add(id);
+            result.push(id);
+        }
+    });
+    return result;
+}
+
+function hasRouteDetailInlineSameName(points) {
+    const nameToIds = new Map();
+    points.forEach(point => {
+        const name = String(point.name || "").trim();
+        if (!name) {
+            return;
+        }
+        if (!nameToIds.has(name)) {
+            nameToIds.set(name, new Set());
+        }
+        nameToIds.get(name).add(Number(point.id));
+    });
+    return Array.from(nameToIds.values()).some(ids => ids.size > 1);
 }
 
 function buildMapQuery(item) {

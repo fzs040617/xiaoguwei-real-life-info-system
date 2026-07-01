@@ -5,7 +5,7 @@
     <title>地图点详情｜小谷围岛广州大学城真实生活信息共建系统</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body onload="loadMapPointDetail()">
+<body onload="loadMapPointDetailPage()">
 
 <div class="header">
     <div class="header-inner">
@@ -40,6 +40,130 @@
 </div>
 
 <script src="map-route-detail.js?v=21"></script>
+<script>
+async function loadMapPointDetailPage() {
+    await loadMapPointDetail();
+    await loadMapPointSpatialRelations();
+}
+
+async function loadMapPointSpatialRelations() {
+    const id = new URLSearchParams(window.location.search).get("id");
+    const detailBox = document.getElementById("detailBox");
+    const detailCard = detailBox ? detailBox.querySelector(".card") : null;
+    if (!id || !detailCard || document.getElementById("mapPointSpatialRelations")) {
+        return;
+    }
+
+    try {
+        const [pointResponse, routeResponse] = await Promise.all([
+            fetch(`http://127.0.0.1:8000/map-points/${encodeURIComponent(id)}`),
+            fetch("http://127.0.0.1:8000/routes")
+        ]);
+        const point = await pointResponse.json();
+        const routeData = await routeResponse.json();
+        if (!pointResponse.ok) {
+            return;
+        }
+
+        const relatedHtml = buildMapDetailRelatedSource(point);
+        const routeHtml = routeResponse.ok
+            ? buildMapDetailRouteLinks(routeData.data || [], Number(id))
+            : "";
+
+        detailCard.insertAdjacentHTML("beforeend", `
+            <div id="mapPointSpatialRelations" class="spatial-link-panel spatial-detail-panel">
+                <div>
+                    <strong>空间关联</strong>
+                    <span>展示该地图点的来源信息和经过它的生活路线。</span>
+                </div>
+                ${relatedHtml}
+                ${routeHtml || "<p>暂无路线经过该地图点，可在路线中心新增路线并填写该地图点 ID。</p>"}
+            </div>
+        `);
+    } catch (error) {
+        // 关联增强失败不影响原详情页。
+    }
+}
+
+function buildMapDetailRelatedSource(point) {
+    if (!point.target_type || !point.target_id) {
+        return "<p>该地图点暂未关联真实库信息或线索。</p>";
+    }
+    const label = point.target_type === "verified" ? "真实库信息" : "线索";
+    const href = point.target_type === "verified"
+        ? `item-detail.html?id=${Number(point.target_id)}`
+        : `clue-detail.html?id=${Number(point.target_id)}`;
+    return `
+        <div class="spatial-linked-item">
+            <span class="tag">${label} #${Number(point.target_id)}</span>
+            <strong>已关联${label}</strong>
+            <button class="small-button" onclick="location.href='${href}'">打开关联来源</button>
+        </div>
+    `;
+}
+
+function buildMapDetailRouteLinks(routes, mapPointId) {
+    const seenRouteIds = new Set();
+    const matched = routes.filter(route => {
+        const routeId = Number(route.id);
+        if (!routeId || seenRouteIds.has(routeId)) {
+            return false;
+        }
+        const ids = [
+            ...(route.points || []).map(point => Number(point.id)),
+            ...parseMapDetailRoutePointIds(route.point_ids)
+        ].filter(Number.isInteger);
+        const matchedRoute = ids.includes(Number(mapPointId));
+        if (matchedRoute) {
+            seenRouteIds.add(routeId);
+        }
+        return matchedRoute;
+    });
+    return matched.map(route => `
+        <div class="spatial-linked-item">
+            <span class="tag">路线 #${Number(route.id)}</span>
+            <strong>${escapeDetailHtml(route.name || "未命名路线")}</strong>
+            <p>${escapeDetailHtml(route.start_area || route.description || "暂无路线说明")}</p>
+            <button class="small-button" onclick="location.href='route-detail.html?id=${Number(route.id)}'">打开路线详情</button>
+        </div>
+    `).join("");
+}
+
+function parseMapDetailRoutePointIds(value) {
+    if (!value) {
+        return [];
+    }
+    if (Array.isArray(value)) {
+        return uniqueMapDetailRoutePointIds(value);
+    }
+    const text = String(value || "").trim();
+    if (!text) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+            return uniqueMapDetailRoutePointIds(parsed);
+        }
+    } catch (error) {
+        // Use separator parsing below.
+    }
+    return uniqueMapDetailRoutePointIds(text.replace(/[，、;；\s]+/g, ",").split(","));
+}
+
+function uniqueMapDetailRoutePointIds(values) {
+    const seen = new Set();
+    const result = [];
+    values.forEach(value => {
+        const id = Number(String(value || "").trim());
+        if (Number.isInteger(id) && id > 0 && !seen.has(id)) {
+            seen.add(id);
+            result.push(id);
+        }
+    });
+    return result;
+}
+</script>
 <script src="history-auto.js?v=21"></script>
 <script src="map-route-detail-edit.js?v=22"></script>
 <script src="map-route-feedback.js?v=24"></script>

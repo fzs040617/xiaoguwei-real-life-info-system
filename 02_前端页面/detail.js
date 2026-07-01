@@ -52,6 +52,7 @@ async function loadClueDetail() {
         const displayTitle = getClueDetailTitle(item, cleanedSummary);
         const displaySourcePlatform = getDisplaySourcePlatform(item.source_platform);
         const displaySourceUrl = getDisplaySourceUrl(item.source_url);
+        const spatialPanel = await renderSpatialConnectionPanel(item, "clue", cleanedSummary);
 
         box.innerHTML = `
             <div class="card clue-detail-card">
@@ -79,11 +80,9 @@ async function loadClueDetail() {
                     <p>${escapeHtml(cleanedSummary || "暂无简介，等待用户补充。")}</p>
                 </div>
 
-                ${renderSpatialOrganizerHint(item, "clue", cleanedSummary)}
+                ${spatialPanel}
 
                 <div class="clue-review-tip ${getDetailReviewTipClass(item)}">${escapeHtml(statusTip)}</div>
-
-                ${renderSpatialOrganizerHint(item, "verified", item.summary)}
 
                 <div class="action-row">
                     <div class="action-title">用户核验</div>
@@ -122,6 +121,7 @@ async function loadVerifiedDetail() {
             box.innerHTML = `<div class="empty">加载失败：${JSON.stringify(item)}</div>`;
             return;
         }
+        const spatialPanel = await renderSpatialConnectionPanel(item, "verified", item.summary);
 
         box.innerHTML = `
             <div class="card">
@@ -141,6 +141,8 @@ async function loadVerifiedDetail() {
                     <strong>简介：</strong><br>
                     ${escapeHtml(item.summary || "暂无简介")}
                 </div>
+
+                ${spatialPanel}
 
                 <div class="action-row">
                     <div class="action-title">真实库管理</div>
@@ -279,6 +281,116 @@ function getStatusTagClass(status) {
     if (status.includes("不准确") || status.includes("过期") || status.includes("归档")) return "danger-tag";
     if (status.includes("已转入真实库")) return "tag";
     return "warning";
+}
+
+async function renderSpatialConnectionPanel(item, type, displaySummary) {
+    const targetId = Number(item && item.id);
+    if (!targetId) {
+        return renderSpatialOrganizerHint(item, type, displaySummary);
+    }
+
+    const links = await loadSpatialLinksForDetail(type, targetId);
+    if (links.mapPoints.length === 0) {
+        return renderSpatialOrganizerHint(item, type, displaySummary);
+    }
+
+    const mapPointCards = links.mapPoints.map(point => `
+        <div class="spatial-linked-item">
+            <span class="tag">地图点 #${escapeHtml(point.id)}</span>
+            <strong>${escapeHtml(point.name || "未命名地图点")}</strong>
+            <p>${escapeHtml(point.address || point.description || "暂无地址说明")}</p>
+            <button class="small-button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">打开地图点详情</button>
+        </div>
+    `).join("");
+    const routeCards = links.routes.map(route => `
+        <div class="spatial-linked-item">
+            <span class="tag">路线 #${escapeHtml(route.id)}</span>
+            <strong>${escapeHtml(route.name || "未命名路线")}</strong>
+            <p>${escapeHtml(route.start_area || route.description || "暂无路线说明")}</p>
+            <button class="small-button" onclick="location.href='route-detail.html?id=${Number(route.id)}'">打开路线详情</button>
+        </div>
+    `).join("");
+
+    return `
+        <div class="spatial-organizer-hint spatial-link-status">
+            <strong>空间关联状态</strong>
+            <p>这条${type === "verified" ? "真实库信息" : "线索"}已整理为空间地点，可从详情页继续查看来源、地图点和生活路线。</p>
+            <div class="spatial-linked-list">
+                ${mapPointCards}
+            </div>
+            ${
+                routeCards
+                ? `<div class="spatial-linked-routes"><strong>已关联生活路线</strong><div class="spatial-linked-list">${routeCards}</div></div>`
+                : `<p>当前暂未发现经过这些地图点的生活路线。</p>`
+            }
+        </div>
+    `;
+}
+
+async function loadSpatialLinksForDetail(type, targetId) {
+    try {
+        const [pointResponse, routeResponse] = await Promise.all([
+            fetch(`${API_BASE}/map-points`),
+            fetch(`${API_BASE}/routes`)
+        ]);
+        const pointData = await pointResponse.json();
+        const routeData = await routeResponse.json();
+        const mapPoints = pointResponse.ok
+            ? (pointData.data || []).filter(point => point.target_type === type && Number(point.target_id) === Number(targetId))
+            : [];
+        const pointIdSet = new Set(mapPoints.map(point => Number(point.id)).filter(Boolean));
+        const routes = routeResponse.ok
+            ? (routeData.data || []).filter(route => routeTouchesAnyMapPoint(route, pointIdSet))
+            : [];
+
+        return {mapPoints, routes};
+    } catch (error) {
+        return {mapPoints: [], routes: []};
+    }
+}
+
+function routeTouchesAnyMapPoint(route, pointIdSet) {
+    if (!pointIdSet || pointIdSet.size === 0) {
+        return false;
+    }
+    const idsFromPoints = (route.points || []).map(point => Number(point.id)).filter(Boolean);
+    const idsFromText = parseDetailRoutePointIds(route.point_ids);
+    return [...idsFromPoints, ...idsFromText].some(pointId => pointIdSet.has(pointId));
+}
+
+function parseDetailRoutePointIds(value) {
+    if (!value) {
+        return [];
+    }
+    if (Array.isArray(value)) {
+        return uniqueDetailRoutePointIds(value);
+    }
+    const text = String(value || "").trim();
+    if (!text) {
+        return [];
+    }
+    try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+            return uniqueDetailRoutePointIds(parsed);
+        }
+    } catch (error) {
+        // Fall back to separator parsing.
+    }
+    return uniqueDetailRoutePointIds(text.replace(/[，、;；\s]+/g, ",").split(","));
+}
+
+function uniqueDetailRoutePointIds(values) {
+    const seen = new Set();
+    const result = [];
+    values.forEach(value => {
+        const id = Number(String(value || "").trim());
+        if (Number.isInteger(id) && id > 0 && !seen.has(id)) {
+            seen.add(id);
+            result.push(id);
+        }
+    });
+    return result;
 }
 
 function renderSpatialOrganizerHint(item, type, displaySummary) {

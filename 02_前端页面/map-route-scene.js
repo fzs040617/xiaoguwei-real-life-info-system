@@ -310,6 +310,7 @@
         }
 
         renderMapStats(mapState.points);
+        renderMapOverviewPreview(mapState.points);
         updateMapFilterButtons();
 
         const visiblePoints = mapState.scene === ALL
@@ -333,6 +334,7 @@
         }
 
         renderRouteStats(routeState.routes);
+        renderRouteOverviewPreview(routeState.routes);
         updateRouteFilterButtons();
 
         const visibleRoutes = routeState.scene === ALL
@@ -378,13 +380,181 @@
         }).join("");
     }
 
+    function renderMapOverviewPreview(points) {
+        const box = document.getElementById("mapOverviewPreview");
+        if (!box) {
+            return;
+        }
+        const visiblePoints = getVisibleMapPoints(points);
+        const recentPoints = sortSceneItems(visiblePoints).slice(0, 4);
+        const representativePoints = pickRepresentativeItems(visiblePoints, "scene", 4);
+
+        box.innerHTML = `
+            ${renderOverviewBlock(
+                "最近地点预览",
+                recentPoints,
+                renderMapPreviewCard,
+                "暂无地点，可到“新增地点”添加。"
+            )}
+            ${renderOverviewBlock(
+                mapState.scene === ALL ? "场景代表地点" : `${escapeSceneHtml(mapState.scene)}代表地点`,
+                representativePoints,
+                renderMapPreviewCard,
+                "当前场景暂无代表地点，可切换场景或新增地点。"
+            )}
+            <div class="scene-overview-actions">
+                <button class="small-button" type="button" onclick="showMapSceneModule('create')">去新增地点</button>
+                <button class="small-button btn-secondary" type="button" onclick="showMapSceneModule('list')">查看全部地点</button>
+            </div>
+        `;
+    }
+
+    function renderRouteOverviewPreview(routes) {
+        const box = document.getElementById("routeOverviewPreview");
+        if (!box) {
+            return;
+        }
+        const visibleRoutes = getVisibleRoutes(routes);
+        const recentRoutes = sortSceneItems(visibleRoutes).slice(0, 4);
+        const representativeRoutes = pickRepresentativeItems(visibleRoutes, "scene", 4);
+
+        box.innerHTML = `
+            ${renderOverviewBlock(
+                "最近路线预览",
+                recentRoutes,
+                renderRoutePreviewCard,
+                "暂无路线，可到“新增路线”添加。"
+            )}
+            ${renderOverviewBlock(
+                routeState.scene === ALL ? "场景代表路线" : `${escapeSceneHtml(routeState.scene)}代表路线`,
+                representativeRoutes,
+                renderRoutePreviewCard,
+                "当前场景暂无代表路线，可切换场景或新增路线。"
+            )}
+            <div class="scene-overview-actions">
+                <button class="small-button" type="button" onclick="showRouteSceneModule('create')">去新增路线</button>
+                <button class="small-button btn-secondary" type="button" onclick="showRouteSceneModule('list')">查看全部路线</button>
+            </div>
+        `;
+    }
+
+    function renderOverviewBlock(title, items, renderer, emptyText) {
+        return `
+            <div class="scene-overview-block">
+                <div class="scene-overview-title">
+                    <h3>${title}</h3>
+                    <span>${items.length} 条</span>
+                </div>
+                <div class="scene-overview-list">
+                    ${items.length > 0 ? items.map(renderer).join("") : `<div class="scene-empty-state">${emptyText}</div>`}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderMapPreviewCard(point) {
+        const relatedButton = buildSceneRelatedButton(point);
+        return `
+            <div class="scene-preview-card" onclick="location.href='map-detail.html?id=${Number(point.id)}'">
+                <div class="scene-preview-tags">
+                    <span class="tag scene-tag">${escapeSceneHtml(point.scene || "其他")}</span>
+                    <span class="tag">${escapeSceneHtml(point.category || "未分类")}</span>
+                </div>
+                <h4>${escapeSceneHtml(point.name || "未命名地点")}</h4>
+                <p>${escapeSceneHtml(point.address || "暂无地址/区域")}</p>
+                <div class="scene-preview-meta">
+                    <span>${escapeSceneHtml(point.source || "未知来源")}</span>
+                    <span>${escapeSceneHtml(point.created_at || "未知时间")}</span>
+                </div>
+                <div class="scene-preview-actions" onclick="event.stopPropagation()">
+                    <button class="small-button" type="button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">打开地点</button>
+                    ${relatedButton}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderRoutePreviewCard(route) {
+        const pointItems = buildRoutePointItems(route);
+        const pointNames = pointItems.map(formatRoutePointLabel).filter(Boolean);
+        const endpoint = pointNames.length > 0 ? pointNames[pointNames.length - 1] : "待补充";
+        const pointLinks = buildCompactRoutePointLinks(route);
+        return `
+            <div class="scene-preview-card" onclick="location.href='route-detail.html?id=${Number(route.id)}'">
+                <div class="scene-preview-tags">
+                    <span class="tag scene-tag">${escapeSceneHtml(route.scene || "其他路线")}</span>
+                    <span class="tag">${escapeSceneHtml(route.route_type || "路线")}</span>
+                </div>
+                <h4>${escapeSceneHtml(route.name || "未命名路线")}</h4>
+                <p>起点：${escapeSceneHtml(route.start_area || "待补充")} / 终点：${escapeSceneHtml(endpoint)}</p>
+                <p>途经：${escapeSceneHtml(pointNames.join(" -> ") || route.point_ids || "待补充")}</p>
+                <div class="scene-preview-meta">
+                    <span>${escapeSceneHtml(route.source || "未知来源")}</span>
+                    <span>${escapeSceneHtml(route.created_at || "未知时间")}</span>
+                </div>
+                <div class="scene-preview-actions" onclick="event.stopPropagation()">
+                    <button class="small-button" type="button" onclick="location.href='route-detail.html?id=${Number(route.id)}'">打开路线</button>
+                    ${pointLinks}
+                </div>
+            </div>
+        `;
+    }
+
+    function getVisibleMapPoints(points) {
+        return mapState.scene === ALL
+            ? points
+            : points.filter(point => point.scene === mapState.scene);
+    }
+
+    function getVisibleRoutes(routes) {
+        return routeState.scene === ALL
+            ? routes
+            : routes.filter(route => route.scene === routeState.scene);
+    }
+
+    function sortSceneItems(items) {
+        return [...items].sort((a, b) => {
+            const timeA = Date.parse(a.created_at || "") || 0;
+            const timeB = Date.parse(b.created_at || "") || 0;
+            if (timeA !== timeB) {
+                return timeB - timeA;
+            }
+            return (Number(b.id) || 0) - (Number(a.id) || 0);
+        });
+    }
+
+    function pickRepresentativeItems(items, groupKey, limit) {
+        const seen = new Set();
+        const result = [];
+        sortSceneItems(items).forEach(item => {
+            const key = item[groupKey] || "其他";
+            if (!seen.has(key) || items.length <= limit) {
+                seen.add(key);
+                result.push(item);
+            }
+        });
+        return result.slice(0, limit);
+    }
+
+    function buildCompactRoutePointLinks(route) {
+        const items = buildRoutePointItems(route);
+        const visibleItems = items.slice(0, 3);
+        const moreCount = Math.max(items.length - visibleItems.length, 0);
+        return `
+            ${visibleItems.map(point => `
+                <button class="small-button btn-secondary" type="button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">${escapeSceneHtml(formatRoutePointLabel(point))}</button>
+            `).join("")}
+            ${moreCount > 0 ? `<span class="scene-more-count">等 ${moreCount} 个地点</span>` : ""}
+        `;
+    }
+
     function renderSceneMapPointCard(point) {
         const archived = point.status === ARCHIVED;
         const area = point.address || "暂无区域";
         const hasCoordinates = Boolean(point.latitude && point.longitude);
         const mapQuery = buildSceneMapQuery(point);
         const relatedButton = buildSceneRelatedButton(point);
-        const linkedText = point.target_type && point.target_id ? `${point.target_type} #${point.target_id}` : "暂未关联";
+        const linkedText = buildSceneRelatedText(point);
 
         return `
             <div class="card scene-card scene-map-card" data-map-point-id="${Number(point.id) || ""}">
@@ -402,11 +572,12 @@
                     <div><strong>所在区域</strong><span>${escapeSceneHtml(area)}</span></div>
                     <div><strong>来源</strong><span>${escapeSceneHtml(point.source || "未知来源")}</span></div>
                     <div><strong>最近更新时间</strong><span>${escapeSceneHtml(point.created_at || "未知")}</span></div>
-                    <div><strong>关联真实信息</strong><span>${escapeSceneHtml(linkedText)}</span></div>
+                    <div><strong>关联来源</strong><span>${escapeSceneHtml(linkedText)}</span></div>
                     <div><strong>坐标状态</strong><span>${hasCoordinates ? `${escapeSceneHtml(point.latitude)}, ${escapeSceneHtml(point.longitude)}` : "暂无坐标"}</span></div>
                 </div>
 
                 <div class="summary">${escapeSceneHtml(point.description || "暂无简介，可后续从真实库或用户反馈中补充。")}</div>
+                ${buildSceneRelatedPanel(point)}
 
                 <div class="action-row">
                     <div class="action-title">地图与关联入口</div>
@@ -431,17 +602,12 @@
 
     function renderSceneRouteCard(route) {
         const archived = route.status === ARCHIVED;
-        const pointNames = (route.points || []).map(point => point.name).filter(Boolean);
+        const pointItems = buildRoutePointItems(route);
+        const pointNames = pointItems.map(formatRoutePointLabel).filter(Boolean);
         const endpoint = pointNames.length > 0 ? pointNames[pointNames.length - 1] : "待补充";
         const audience = inferRouteAudience(route);
         const notes = inferRouteNotes(route);
-        const pointsHtml = (route.points || []).map(point => `
-            <div class="target-item">
-                <span class="tag">${escapeSceneHtml(point.category || "未分类")}</span>
-                <strong>${escapeSceneHtml(point.name)}</strong>
-                <div>地址：${escapeSceneHtml(point.address || "暂无地址")}</div>
-            </div>
-        `).join("");
+        const pointsHtml = buildRoutePointList(route);
 
         return `
             <div class="card scene-card scene-route-card" data-route-plan-id="${Number(route.id) || ""}">
@@ -457,7 +623,7 @@
                     <div><strong>适用场景</strong><span>${escapeSceneHtml(route.scene || "其他路线")}</span></div>
                     <div><strong>起点</strong><span>${escapeSceneHtml(route.start_area || "待补充")}</span></div>
                     <div><strong>终点</strong><span>${escapeSceneHtml(endpoint)}</span></div>
-                    <div><strong>途经点</strong><span>${escapeSceneHtml(pointNames.join(" -> ") || route.point_ids || "待补充")}</span></div>
+                    <div><strong>途经地图点</strong><span>${escapeSceneHtml(pointNames.join(" -> ") || route.point_ids || "待补充")}</span></div>
                     <div><strong>适合人群</strong><span>${escapeSceneHtml(audience)}</span></div>
                     <div><strong>来源 / 更新时间</strong><span>${escapeSceneHtml(route.source || "未知来源")} / ${escapeSceneHtml(route.created_at || "未知")}</span></div>
                 </div>
@@ -560,6 +726,160 @@
         Array.from(document.querySelectorAll(`[id^="${prefix}"]`)).forEach(button => {
             button.classList.toggle("active", button.id === `${prefix}${activeValue}`);
         });
+    }
+
+    function buildSceneRelatedText(point) {
+        if (!point.target_type || !point.target_id) {
+            return "暂未关联";
+        }
+        return `${getRelatedTargetLabel(point.target_type)} #${point.target_id}`;
+    }
+
+    function buildSceneRelatedPanel(point) {
+        if (!point.target_type || !point.target_id) {
+            return "";
+        }
+        const label = getRelatedTargetLabel(point.target_type);
+        const href = getRelatedTargetHref(point.target_type, point.target_id);
+        if (!href) {
+            return "";
+        }
+        return `
+            <div class="spatial-link-panel">
+                <div>
+                    <strong>已关联${escapeSceneHtml(label)}</strong>
+                    <span>关联 ID：${escapeSceneHtml(point.target_id)}</span>
+                </div>
+                <button class="small-button" onclick="location.href='${escapeSceneJs(href)}'">打开关联来源</button>
+            </div>
+        `;
+    }
+
+    function buildRoutePointList(route) {
+        const items = buildRoutePointItems(route);
+        const visibleItems = items.slice(0, 3);
+        const moreCount = Math.max(items.length - visibleItems.length, 0);
+        const itemHtml = visibleItems.map(point => `
+            <div class="target-item spatial-route-point-item scene-linked-point-card">
+                <div class="scene-linked-point-head">
+                    <strong>${escapeSceneHtml(point.name || `地图点 #${point.id}`)}</strong>
+                    <span class="scene-id-badge">#${Number(point.id)}</span>
+                </div>
+                <div class="scene-point-meta">
+                    <span>ID：${Number(point.id)}</span>
+                    <span>分类：${escapeSceneHtml(point.category || "未分类")}</span>
+                    <span>地址：${escapeSceneHtml(point.address || "暂无地址/区域")}</span>
+                    <span>来源：${escapeSceneHtml(point.source || "未知来源")}</span>
+                </div>
+                <div>${point.name ? "" : "未找到对应地图点，可能已删除或尚未创建。"}</div>
+                <button class="small-button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">${point.name ? "打开地图点详情" : "尝试打开地图点详情"}</button>
+            </div>
+        `).join("");
+        return `${buildRouteDuplicateNote(items)}${itemHtml}${moreCount > 0 ? `<div class="scene-more-count">等 ${moreCount} 个地点</div>` : ""}`;
+    }
+
+    function buildRoutePointItems(route) {
+        const byId = new Map();
+        (route.points || []).forEach(point => {
+            const id = Number(point && point.id);
+            if (id && !byId.has(id)) {
+                byId.set(id, {
+                    id,
+                    name: point.name || "",
+                    category: point.category || "",
+                    address: point.address || "",
+                    source: point.source || "",
+                    status: point.status || ""
+                });
+            }
+        });
+        parseRoutePointIds(route.point_ids).forEach(id => {
+            if (!byId.has(id)) {
+                byId.set(id, {id, name: "", category: "地图点 ID", address: "", source: "", status: ""});
+            }
+        });
+        return Array.from(byId.values());
+    }
+
+    function formatRoutePointLabel(point) {
+        const name = point.name || "地图点";
+        return `${name} #${Number(point.id)}`;
+    }
+
+    function buildRouteDuplicateNote(items) {
+        const nameToIds = new Map();
+        items.forEach(point => {
+            const name = String(point.name || "").trim();
+            if (!name) {
+                return;
+            }
+            if (!nameToIds.has(name)) {
+                nameToIds.set(name, new Set());
+            }
+            nameToIds.get(name).add(Number(point.id));
+        });
+        const hasDuplicateName = Array.from(nameToIds.values()).some(ids => ids.size > 1);
+        return hasDuplicateName
+            ? `<div class="scene-duplicate-note">存在同名地点，请根据地图点 ID 区分。</div>`
+            : "";
+    }
+
+    function parseRoutePointIds(pointIdsText) {
+        if (!pointIdsText) {
+            return [];
+        }
+        if (Array.isArray(pointIdsText)) {
+            return uniqueRoutePointIds(pointIdsText);
+        }
+
+        const rawText = String(pointIdsText || "").trim();
+        if (!rawText) {
+            return [];
+        }
+
+        try {
+            const parsed = JSON.parse(rawText);
+            if (Array.isArray(parsed)) {
+                return uniqueRoutePointIds(parsed);
+            }
+        } catch (error) {
+            // Fall back to separator parsing.
+        }
+
+        return uniqueRoutePointIds(rawText.replace(/[，、;；\s]+/g, ",").split(","));
+    }
+
+    function uniqueRoutePointIds(values) {
+        const seen = new Set();
+        const result = [];
+        values.forEach(value => {
+            const id = Number(String(value || "").trim());
+            if (Number.isInteger(id) && id > 0 && !seen.has(id)) {
+                seen.add(id);
+                result.push(id);
+            }
+        });
+        return result;
+    }
+
+    function getRelatedTargetLabel(targetType) {
+        if (targetType === "verified") return "真实库信息";
+        if (targetType === "clue") return "线索";
+        return targetType || "来源";
+    }
+
+    function getRelatedTargetHref(targetType, targetId) {
+        const id = Number(targetId);
+        if (!id) {
+            return "";
+        }
+        if (targetType === "verified") {
+            return `item-detail.html?id=${id}`;
+        }
+        if (targetType === "clue") {
+            return `clue-detail.html?id=${id}`;
+        }
+        return "";
     }
 
     function initMapSceneTabs() {
