@@ -9,6 +9,9 @@
         category: ALL,
         status: NORMAL,
         points: [],
+        routeUsage: new Map(),
+        routesLoaded: false,
+        routeLoadFailed: false,
         pendingCreatedId: null,
         pendingFallback: false
     };
@@ -108,9 +111,11 @@
                 ...point,
                 scene: inferMapScene(point)
             }));
+            loadMapRouteUsage();
             renderMapSceneView();
         } catch (error) {
             box.innerHTML = `<div class="empty">地图点加载失败，请确认后端已启动。</div>`;
+            renderMapDedupeView();
         }
     };
 
@@ -311,6 +316,7 @@
 
         renderMapStats(mapState.points);
         renderMapOverviewPreview(mapState.points);
+        renderMapDedupeView();
         updateMapFilterButtons();
 
         const visiblePoints = mapState.scene === ALL
@@ -363,6 +369,260 @@
             const value = name === ALL ? points.length : counts[name] || 0;
             return `<div class="scene-stat-card"><strong>${value}</strong><span>${escapeSceneHtml(name === ALL ? "地点总数" : name)}</span></div>`;
         }).join("");
+    }
+
+    async function loadMapRouteUsage() {
+        const summaryBox = document.getElementById("mapDedupeSummary");
+        const listBox = document.getElementById("mapDedupeList");
+        if (!summaryBox && !listBox) {
+            return;
+        }
+
+        mapState.routesLoaded = false;
+        mapState.routeLoadFailed = false;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/routes`);
+            const data = await response.json();
+            if (!response.ok) {
+                mapState.routeUsage = new Map();
+                mapState.routeLoadFailed = true;
+                renderMapDedupeView();
+                return;
+            }
+
+            mapState.routeUsage = buildMapRouteUsage(data.data || []);
+            mapState.routesLoaded = true;
+            mapState.routeLoadFailed = false;
+            renderMapDedupeView();
+        } catch (error) {
+            mapState.routeUsage = new Map();
+            mapState.routeLoadFailed = true;
+            renderMapDedupeView();
+        }
+    }
+
+    function buildMapRouteUsage(routes) {
+        const usage = new Map();
+        (routes || []).forEach(route => {
+            const routeId = Number(route.id);
+            if (!routeId) {
+                return;
+            }
+            const pointIds = new Set([
+                ...(route.points || []).map(point => Number(point.id)).filter(Boolean),
+                ...parseRoutePointIds(route.point_ids)
+            ]);
+            pointIds.forEach(pointId => {
+                if (!usage.has(pointId)) {
+                    usage.set(pointId, []);
+                }
+                if (!usage.get(pointId).some(item => Number(item.id) === routeId)) {
+                    usage.get(pointId).push(route);
+                }
+            });
+        });
+        return usage;
+    }
+
+    function renderMapDedupeView() {
+        const summaryBox = document.getElementById("mapDedupeSummary");
+        const listBox = document.getElementById("mapDedupeList");
+        if (!summaryBox || !listBox) {
+            return;
+        }
+
+        const groups = buildMapDedupeGroups(mapState.points);
+        const strongCount = groups.filter(group => group.type === "strong").length;
+        const weakCount = groups.filter(group => group.type === "weak").length;
+        const pointCount = new Set(groups.flatMap(group => group.points.map(point => Number(point.id)))).size;
+
+        summaryBox.innerHTML = [
+            ["重复组总数", groups.length],
+            ["涉及地图点", pointCount],
+            ["强疑似重复", strongCount],
+            ["弱疑似重复", weakCount]
+        ].map(([label, value]) => `<div class="scene-stat-card"><strong>${value}</strong><span>${label}</span></div>`).join("");
+
+        if (groups.length === 0) {
+            listBox.className = "scene-empty-state";
+            listBox.innerHTML = "暂无疑似重复地点。后续新增地点后，系统会自动根据名称和地址识别可能重复的记录。";
+            return;
+        }
+
+        listBox.className = "dedupe-group-list";
+        listBox.innerHTML = groups.map(renderMapDedupeGroup).join("");
+    }
+
+    function buildMapDedupeGroups(points) {
+        const uniquePoints = uniqueMapPointsById(points);
+        const strongGroups = [];
+        const weakGroups = [];
+        const strongMap = new Map();
+        const nameMap = new Map();
+
+        uniquePoints.forEach(point => {
+            const nameKey = normalizeDedupeText(point.name);
+            const addressKey = normalizeDedupeText(point.address);
+            if (!nameKey) {
+                return;
+            }
+
+            if (!nameMap.has(nameKey)) {
+                nameMap.set(nameKey, []);
+            }
+            nameMap.get(nameKey).push(point);
+
+            if (addressKey) {
+                const strongKey = `${nameKey}|${addressKey}`;
+                if (!strongMap.has(strongKey)) {
+                    strongMap.set(strongKey, []);
+                }
+                strongMap.get(strongKey).push(point);
+            }
+        });
+
+        strongMap.forEach(groupPoints => {
+            if (groupPoints.length >= 2) {
+                strongGroups.push(createMapDedupeGroup("strong", groupPoints));
+            }
+        });
+
+        nameMap.forEach(groupPoints => {
+            const addressKeys = new Set(groupPoints.map(point => normalizeDedupeText(point.address)));
+            if (groupPoints.length >= 2 && (addressKeys.size > 1 || addressKeys.has(""))) {
+                weakGroups.push(createMapDedupeGroup("weak", groupPoints));
+            }
+        });
+
+        return [...strongGroups, ...weakGroups].sort((a, b) => {
+            if (a.type !== b.type) {
+                return a.type === "strong" ? -1 : 1;
+            }
+            return b.points.length - a.points.length;
+        });
+    }
+
+    function uniqueMapPointsById(points) {
+        const map = new Map();
+        (points || []).forEach(point => {
+            const id = Number(point && point.id);
+            if (id && !map.has(id)) {
+                map.set(id, point);
+            }
+        });
+        return Array.from(map.values());
+    }
+
+    function createMapDedupeGroup(type, points) {
+        const sortedPoints = [...points].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+        const recommended = pickRecommendedMapPoint(sortedPoints);
+        return {
+            type,
+            key: `${type}:${sortedPoints.map(point => point.id).join(",")}`,
+            name: sortedPoints[0]?.name || "未命名地点",
+            points: sortedPoints,
+            recommended
+        };
+    }
+
+    function pickRecommendedMapPoint(points) {
+        return [...points].sort((a, b) => {
+            const routeDiff = getMapPointRouteUsage(b.id).length - getMapPointRouteUsage(a.id).length;
+            if (routeDiff !== 0) {
+                return routeDiff;
+            }
+            const timeA = Date.parse(a.created_at || "") || Number.MAX_SAFE_INTEGER;
+            const timeB = Date.parse(b.created_at || "") || Number.MAX_SAFE_INTEGER;
+            if (timeA !== timeB) {
+                return timeA - timeB;
+            }
+            return (Number(a.id) || 0) - (Number(b.id) || 0);
+        })[0] || points[0];
+    }
+
+    function renderMapDedupeGroup(group) {
+        const typeLabel = group.type === "strong" ? "强疑似重复" : "弱疑似重复";
+        const typeClass = group.type === "strong" ? "strong" : "weak";
+        const idsText = group.points.map(point => `#${Number(point.id)}`).join("、");
+        return `
+            <div class="dedupe-group-card">
+                <div class="dedupe-group-header">
+                    <div>
+                        <span class="tag dedupe-type-${typeClass}">${typeLabel}</span>
+                        <h3>${escapeSceneHtml(group.name)}</h3>
+                        <p>涉及 ID：${escapeSceneHtml(idsText)}</p>
+                    </div>
+                    <div class="dedupe-recommend">
+                        <strong>推荐保留：#${Number(group.recommended.id)}</strong>
+                        <span>建议保留创建较早或关联路线更多的记录，其它记录先人工核对。</span>
+                    </div>
+                </div>
+                <div class="scene-duplicate-note">本页只做识别和人工治理入口，不自动删除、不自动合并、不修改路线 point_ids。</div>
+                <div class="dedupe-point-list">
+                    ${group.points.map(point => renderMapDedupePoint(point, Number(point.id) === Number(group.recommended.id))).join("")}
+                </div>
+                <div class="scene-preview-actions">
+                    <button class="small-button" type="button" onclick="showMapSceneModule('list')">打开地图中心地点列表</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderMapDedupePoint(point, isRecommended) {
+        const routes = getMapPointRouteUsage(point.id);
+        const relationText = point.target_type && point.target_id
+            ? `${getRelatedTargetLabel(point.target_type)} #${point.target_id}`
+            : "暂未关联";
+        return `
+            <div class="dedupe-point-card">
+                <div class="scene-linked-point-head">
+                    <strong>地图点 #${Number(point.id)} · ${escapeSceneHtml(point.name || "未命名地点")}</strong>
+                    ${isRecommended ? `<span class="tag scene-tag">建议保留</span>` : `<span class="tag warning">疑似重复</span>`}
+                </div>
+                <div class="scene-point-meta">
+                    <span>ID：${Number(point.id)}</span>
+                    <span>分类：${escapeSceneHtml(point.category || "未分类")}</span>
+                    <span>场景：${escapeSceneHtml(point.scene || "其他")}</span>
+                    <span>地址：${escapeSceneHtml(point.address || "暂无地址/区域")}</span>
+                    <span>来源：${escapeSceneHtml(point.source || "未知来源")}</span>
+                    <span>创建时间：${escapeSceneHtml(point.created_at || "未知")}</span>
+                    <span>关联：${escapeSceneHtml(relationText)}</span>
+                    <span>路线使用：${mapState.routeLoadFailed ? "暂不可用" : `${routes.length} 条`}</span>
+                </div>
+                ${renderMapDedupeRouteLinks(routes)}
+                <div class="scene-preview-actions">
+                    <button class="small-button" type="button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">查看地图点详情 #${Number(point.id)}</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderMapDedupeRouteLinks(routes) {
+        if (mapState.routeLoadFailed) {
+            return `<div class="scene-empty-state">路线使用情况暂不可用。</div>`;
+        }
+        if (!routes || routes.length === 0) {
+            return `<div class="scene-empty-state">暂无路线使用该地图点。</div>`;
+        }
+        return `
+            <div class="dedupe-route-list">
+                ${routes.map(route => `
+                    <button class="small-button btn-secondary" type="button" onclick="location.href='route-detail.html?id=${Number(route.id)}'">路线 #${Number(route.id)}：${escapeSceneHtml(route.name || "未命名路线")}</button>
+                `).join("")}
+            </div>
+        `;
+    }
+
+    function getMapPointRouteUsage(pointId) {
+        return mapState.routeUsage.get(Number(pointId)) || [];
+    }
+
+    function normalizeDedupeText(value) {
+        return String(value || "")
+            .toLowerCase()
+            .replace(/\s+/g, "")
+            .trim();
     }
 
     function renderRouteStats(routes) {

@@ -47,6 +47,7 @@
         <button class="workspace-module-tab" type="button" data-map-scene-tab="create" aria-pressed="false">新增地点</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="list" aria-pressed="false">地点列表</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="filter" aria-pressed="false">筛选管理</button>
+        <button class="workspace-module-tab" type="button" data-map-scene-tab="dedupe" aria-pressed="false">重复治理</button>
         <span id="mapSceneTabMessage" class="scene-tab-message" aria-live="polite"></span>
     </nav>
 
@@ -217,6 +218,18 @@
         <h2>生活场景地点列表</h2>
         <div id="mapPointList" class="empty">正在加载地图点...</div>
     </div>
+
+    <section class="section ops-panel map-dedupe-panel" data-map-scene-module="dedupe" hidden>
+        <div class="scene-panel-header">
+            <div>
+                <h2>重复地点治理</h2>
+                <p>仅做前端识别和人工治理入口，不自动删除、不自动合并、不修改路线 point_ids。</p>
+            </div>
+            <span>人工治理</span>
+        </div>
+        <div id="mapDedupeSummary" class="scene-stats-grid" aria-live="polite"></div>
+        <div id="mapDedupeList" class="empty">正在识别疑似重复地点...</div>
+    </section>
 
 </div>
 

@@ -1613,6 +1613,84 @@ tr:hover td {
     line-height: 1.55;
 }
 
+.dedupe-group-list {
+    display: grid;
+    gap: 14px;
+}
+
+.dedupe-group-card {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid rgba(31, 122, 77, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.82);
+}
+
+.dedupe-group-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+    gap: 12px;
+    align-items: start;
+}
+
+.dedupe-group-header h3 {
+    margin: 8px 0 4px;
+    color: #173f34;
+    font-size: 17px;
+}
+
+.dedupe-group-header p,
+.dedupe-recommend span {
+    margin: 0;
+    color: #60746c;
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.dedupe-recommend {
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid rgba(31, 122, 77, 0.12);
+    border-radius: 10px;
+    background: rgba(248, 253, 250, 0.9);
+}
+
+.dedupe-recommend strong {
+    color: #1f7a4d;
+}
+
+.dedupe-type-strong {
+    background: #e8f7ef;
+    color: #1f7a4d;
+}
+
+.dedupe-type-weak {
+    background: #fff4d8;
+    color: #7a5a14;
+}
+
+.dedupe-point-list {
+    display: grid;
+    gap: 10px;
+}
+
+.dedupe-point-card {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(31, 122, 77, 0.12);
+    border-radius: 10px;
+    background: rgba(248, 253, 250, 0.72);
+}
+
+.dedupe-route-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
 .spatial-linked-item .tag {
     justify-self: start;
 }
@@ -3997,6 +4075,7 @@ body:not(.xgw-backup-page) #backupImportLayout {
     .ops-form-grid,
     .map-create-panel,
     .scene-overview-grid,
+    .dedupe-group-header,
     .scene-stats-grid,
     .scene-card-grid {
         grid-template-columns: 1fr;
