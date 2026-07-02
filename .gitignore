@@ -13,6 +13,10 @@ env/
 *.sqlite
 *.sqlite3
 xiaoguwei.db
+_runtime/
+runtime/
+*.pid
+*.log
 
 # Backups and archives
 *.zip
