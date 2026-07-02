@@ -43,13 +43,75 @@
     </div>
 
     <nav class="workspace-module-tabs map-scene-tabs" aria-label="地图中心二级模块">
-        <button class="workspace-module-tab active" type="button" data-map-scene-tab="overview" aria-pressed="true">场景总览</button>
+        <button class="workspace-module-tab active" type="button" data-map-scene-tab="life" aria-pressed="true">生活地图</button>
+        <button class="workspace-module-tab" type="button" data-map-scene-tab="overview" aria-pressed="false">场景总览</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="create" aria-pressed="false">新增地点</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="list" aria-pressed="false">地点列表</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="filter" aria-pressed="false">筛选管理</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="dedupe" aria-pressed="false">重复治理</button>
         <span id="mapSceneTabMessage" class="scene-tab-message" aria-live="polite"></span>
     </nav>
+
+    <section class="life-map-module" data-map-scene-module="life" aria-label="生活场景地图">
+        <div class="life-map-head">
+            <div>
+                <h2>生活场景地图</h2>
+                <p>用现有地图点和路线数据生成主题地图、区域点位和路线联动视图，不接外部地图 API，不写入样板数据。</p>
+            </div>
+            <span>地图画布 MVP</span>
+        </div>
+
+        <div id="lifeMapThemeFilters" class="life-theme-filters" aria-label="主题地图筛选"></div>
+
+        <div class="life-map-layout">
+            <aside class="life-map-sidebar">
+                <div class="life-map-panel">
+                    <h3>当前主题</h3>
+                    <div id="lifeMapThemeSummary" class="life-theme-summary">正在加载主题统计...</div>
+                </div>
+                <div class="life-map-panel">
+                    <h3>区域分布</h3>
+                    <div id="lifeMapAreaStats" class="life-area-stats">正在加载区域统计...</div>
+                </div>
+            </aside>
+
+            <main class="life-map-canvas-wrap">
+                <div id="lifeMapCanvas" class="life-map-canvas" aria-live="polite"></div>
+            </main>
+
+            <aside class="life-map-detail">
+                <div id="lifeMapDetailPanel" class="life-map-panel life-map-detail-panel">
+                    <h3>地点 / 路线详情</h3>
+                    <p>点击地图点位或下方路线，查看关联路线、真实库 / 线索入口和详情跳转。</p>
+                </div>
+            </aside>
+        </div>
+
+        <div class="life-map-bottom">
+            <section class="life-map-panel">
+                <div class="life-map-section-title">
+                    <h3>当前主题地点</h3>
+                    <button class="small-button" type="button" onclick="showMapSceneModule('create')">去新增地点</button>
+                </div>
+                <div id="lifeMapPointSummary" class="life-summary-list"></div>
+            </section>
+            <section class="life-map-panel">
+                <div class="life-map-section-title">
+                    <h3>当前主题路线</h3>
+                    <button class="small-button" type="button" onclick="location.href='route.html'">去新增路线</button>
+                </div>
+                <div id="lifeMapRouteSummary" class="life-summary-list"></div>
+            </section>
+        </div>
+
+        <section class="life-map-panel life-sample-panel">
+            <div class="life-map-section-title">
+                <h3>样板数据建议</h3>
+                <span>仅展示建议，不自动入库</span>
+            </div>
+            <div id="lifeMapSamples" class="life-sample-grid"></div>
+        </section>
+    </section>
 
     <section class="scene-panel map-scene-panel" data-map-scene-module="overview" aria-label="生活场景地图筛选">
         <div class="scene-panel-header">
@@ -111,7 +173,7 @@
 
         <div class="form-row">
             <label>地点名称</label>
-            <input id="mapName" placeholder="例如：贝岗某烧烤店、广大附近打印店、大学城南租房点">
+            <input id="mapName" placeholder="例如：贝岗某烧烤店、穗石租房点、南亭打印店、北亭快递点">
         </div>
 
         <div class="form-row">
@@ -129,7 +191,7 @@
 
         <div class="form-row">
             <label>地址/区域</label>
-            <input id="mapAddress" placeholder="例如：贝岗村、广大商业中心、大学城南地铁站附近">
+            <input id="mapAddress" placeholder="例如：贝岗村、穗石市场、南亭商业街、北亭生活区">
         </div>
 
         <div class="form-row">
@@ -247,7 +309,7 @@
 <script src="history-auto.js?v=19"></script>
 <script src="history-badge.js?v=17"></script>
 <script src="map-route-detail-link.js?v=20"></script>
-<script src="map-route-scene.js?v=1"></script>
+<script src="map-route-scene.js?v=2"></script>
 <script src="global-loader.js?v=62"></script>
 </body>
 </html>

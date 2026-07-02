@@ -9,13 +9,18 @@
         category: ALL,
         status: NORMAL,
         points: [],
+        routes: [],
         routeUsage: new Map(),
         routesLoaded: false,
         routeLoadFailed: false,
         dedupeKeepChoices: new Map(),
         dedupeCopyMessage: "",
         pendingCreatedId: null,
-        pendingFallback: false
+        pendingFallback: false,
+        lifeTheme: "全部地图",
+        selectedLifePointId: null,
+        selectedLifeRouteId: null,
+        highlightedLifePointIds: new Set()
     };
 
     const routeState = {
@@ -54,6 +59,54 @@
         {name: "政务办事路线", keywords: ["政务", "街道", "社区", "办事", "证明", "服务中心"]},
         {name: "其他路线", keywords: []}
     ];
+
+    const lifeMapThemes = [
+        {name: "全部地图", className: "all", keywords: []},
+        {name: "美食地图", className: "food", keywords: ["吃饭", "饭店", "餐厅", "糖水", "奶茶", "夜宵", "简餐", "食堂", "饭堂", "美食", "咖啡"]},
+        {name: "citywalk 地图", className: "citywalk", keywords: ["citywalk", "散步", "打卡", "周末", "路线", "游玩", "逛", "景点", "公园", "商圈"]},
+        {name: "租房地图", className: "rent", keywords: ["租房", "公寓", "宿舍", "房租", "单间", "合租", "看房", "住房", "居住"]},
+        {name: "交通地图", className: "traffic", keywords: ["地铁", "公交", "车站", "通勤", "换乘", "交通", "大学城北", "大学城南"]},
+        {name: "医疗地图", className: "medical", keywords: ["医院", "门诊", "校医院", "药店", "就医", "医疗"]},
+        {name: "快递地图", className: "express", keywords: ["快递", "驿站", "取件", "寄件", "菜鸟", "快递点"]},
+        {name: "校园服务地图", className: "campus", keywords: ["饭堂", "宿舍", "维修", "校园", "报到", "办事", "服务"]},
+        {name: "政务地图", className: "gov", keywords: ["政务", "街道办", "社区", "办事处", "政府", "证明"]},
+        {name: "夜间安全地图", className: "safe", keywords: ["夜间", "安全", "照明", "偏僻", "绕行", "晚归"]}
+    ];
+
+    const LIFE_AREA_PENDING = "待补全区域";
+    const lifeMapAreas = ["贝岗", "穗石", "南亭", "北亭"];
+
+    const lifeMapSamples = [
+        {area: "贝岗", items: ["美食", "交通", "租房", "快递", "citywalk 起点"], hint: "大学城北交通可作为贝岗区域建议；补充贝岗村、北站周边、取件点和出发点。"},
+        {area: "穗石", items: ["租房", "美食", "快递", "生活服务"], hint: "围绕穗石村、穗石路、穗石市场补充居住、吃饭、取件和维修办事信息。"},
+        {area: "南亭", items: ["美食", "citywalk", "交通", "租房"], hint: "围绕南亭村、南亭渡口、南亭商业街补充聚餐、散步、交通和看房信息。"},
+        {area: "北亭", items: ["租房", "快递", "校园服务", "夜间安全"], hint: "围绕北亭村、北亭广场、北亭生活区补充居住、取件、校园服务和晚归安全信息。"}
+    ];
+
+    window.setLifeMapTheme = function (theme) {
+        mapState.lifeTheme = theme || "全部地图";
+        mapState.selectedLifePointId = null;
+        mapState.selectedLifeRouteId = null;
+        mapState.highlightedLifePointIds = new Set();
+        renderLifeMapEngine();
+    };
+
+    window.selectLifeMapPoint = function (pointId) {
+        const id = Number(pointId);
+        mapState.selectedLifePointId = id || null;
+        mapState.selectedLifeRouteId = null;
+        mapState.highlightedLifePointIds = id ? new Set([id]) : new Set();
+        renderLifeMapEngine();
+    };
+
+    window.selectLifeMapRoute = function (routeId) {
+        const id = Number(routeId);
+        const route = getLifeRouteById(id);
+        mapState.selectedLifeRouteId = id || null;
+        mapState.selectedLifePointId = null;
+        mapState.highlightedLifePointIds = new Set(getLifeRoutePointIds(route));
+        renderLifeMapEngine();
+    };
 
     window.setMapScene = function (scene) {
         mapState.scene = scene || ALL;
@@ -111,7 +164,9 @@
 
             mapState.points = (data.data || []).map(point => ({
                 ...point,
-                scene: inferMapScene(point)
+                scene: inferMapScene(point),
+                lifeThemes: inferLifePointThemes(point),
+                lifeArea: inferLifeMapArea(point)
             }));
             loadMapRouteUsage();
             renderMapSceneView();
@@ -344,6 +399,423 @@
         }
     };
 
+    function renderLifeMapEngine() {
+        renderLifeThemeFilters();
+        renderLifeThemeSummary();
+        renderLifeMapCanvas();
+        renderLifeMapSummaries();
+        renderLifeMapSamples();
+    }
+
+    function renderLifeThemeFilters() {
+        const box = document.getElementById("lifeMapThemeFilters");
+        if (!box) {
+            return;
+        }
+        box.innerHTML = lifeMapThemes.map(theme => `
+            <button class="life-theme-chip life-theme-${theme.className} ${mapState.lifeTheme === theme.name ? "active" : ""}" type="button" onclick="setLifeMapTheme('${escapeSceneJs(theme.name)}')">
+                ${escapeSceneHtml(theme.name)}
+            </button>
+        `).join("");
+    }
+
+    function renderLifeThemeSummary() {
+        const themeBox = document.getElementById("lifeMapThemeSummary");
+        const areaBox = document.getElementById("lifeMapAreaStats");
+        if (!themeBox && !areaBox) {
+            return;
+        }
+
+        const points = getVisibleLifePoints();
+        const routes = getVisibleLifeRoutes();
+        const theme = getLifeTheme(mapState.lifeTheme);
+        if (themeBox) {
+            const keywordText = theme && theme.keywords.length ? theme.keywords.join("、") : "展示全部主题地点与路线";
+            themeBox.innerHTML = `
+                <div class="life-theme-current">${escapeSceneHtml(mapState.lifeTheme)}</div>
+                <div class="life-stat-pair"><strong>${points.length}</strong><span>地点</span></div>
+                <div class="life-stat-pair"><strong>${routes.length}</strong><span>路线</span></div>
+                <p>匹配字段：category、map_type、name、address、description、source、route category、route description。</p>
+                <p>关键词：${escapeSceneHtml(keywordText)}</p>
+            `;
+        }
+        if (areaBox) {
+            const counts = countLifePointsByArea(points);
+            areaBox.innerHTML = lifeMapAreas.map(area => `
+                <div class="life-area-stat">
+                    <span>${escapeSceneHtml(area)}</span>
+                    <strong>${counts[area] || 0}</strong>
+                </div>
+            `).join("");
+        }
+    }
+
+    function renderLifeMapCanvas() {
+        const box = document.getElementById("lifeMapCanvas");
+        if (!box) {
+            return;
+        }
+
+        const points = getVisibleLifePoints();
+        if (points.length === 0) {
+            box.innerHTML = `
+                <div class="life-map-empty">
+                    <strong>当前主题暂无地图点</strong>
+                    <span>可以切换到全部地图，或到“新增地点”录入真实生活地点。</span>
+                    <button class="small-button" type="button" onclick="showMapSceneModule('create')">去新增地点</button>
+                </div>
+            `;
+            renderLifeDetailPanel();
+            return;
+        }
+
+        const groups = groupLifePointsByArea(points);
+        const pendingPoints = getPendingLifeAreaPoints(points);
+        box.innerHTML = lifeMapAreas.map(area => {
+            const areaPoints = groups.get(area) || [];
+            const areaRoutes = getLifeRoutesForArea(area);
+            return `
+            <section class="life-map-area life-map-area-${getLifeAreaClass(area)}">
+                <div class="life-map-area-head">
+                    <h3>${escapeSceneHtml(area)}</h3>
+                    <span>${areaPoints.length} 个点 / ${areaRoutes.length} 条路线</span>
+                </div>
+                <div class="life-map-point-cloud">
+                    ${areaPoints.map(renderLifeMapPointMarker).join("") || `<div class="life-map-area-empty">暂无当前主题地点，可从新增地点录入。</div>`}
+                </div>
+            </section>
+        `;
+        }).join("") + renderPendingLifeAreaPanel(pendingPoints);
+        renderLifeDetailPanel();
+    }
+
+    function renderLifeMapPointMarker(point) {
+        const pointId = Number(point.id);
+        const themes = point.lifeThemes || inferLifePointThemes(point);
+        const primaryTheme = themes[0] || "全部地图";
+        const theme = getLifeTheme(primaryTheme) || lifeMapThemes[0];
+        const routeCount = getMapPointRouteUsage(point.id).length;
+        const isSelected = Number(mapState.selectedLifePointId) === pointId;
+        const isHighlighted = mapState.highlightedLifePointIds && mapState.highlightedLifePointIds.has(pointId);
+        return `
+            <button class="life-map-point life-theme-${theme.className} ${isSelected ? "selected" : ""} ${isHighlighted ? "highlighted" : ""}" type="button" onclick="selectLifeMapPoint(${pointId})">
+                <span class="life-point-id">#${pointId}</span>
+                <strong>${escapeSceneHtml(point.name || "未命名地点")}</strong>
+                <span>${escapeSceneHtml(point.address || point.lifeArea || "暂无地址")}</span>
+                <span class="life-point-tags">${themes.map(renderLifeThemeTag).join("")}</span>
+                <span class="life-point-meta">${escapeSceneHtml(point.source || "未知来源")} · ${routeCount > 0 ? `路线 ${routeCount} 条` : "暂未被路线使用"}</span>
+            </button>
+        `;
+    }
+
+    function renderPendingLifeAreaPanel(points) {
+        if (!points.length) {
+            return "";
+        }
+        return `
+            <aside class="life-area-pending">
+                <div>
+                    <h3>待补全区域地点</h3>
+                    <p>以下地点暂未识别到贝岗 / 穗石 / 南亭 / 北亭，可在地点详情或地点列表中补充地址。</p>
+                </div>
+                <div class="life-pending-list">
+                    ${points.map(point => `
+                        <div class="life-pending-item">
+                            <strong>地图点 #${Number(point.id)}：${escapeSceneHtml(point.name || "未命名地点")}</strong>
+                            <span>地址：${escapeSceneHtml(point.address || "暂无地址")}</span>
+                            <span>来源：${escapeSceneHtml(point.source || "未知来源")}</span>
+                            <button class="small-button btn-secondary" type="button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">查看地图点详情</button>
+                        </div>
+                    `).join("")}
+                </div>
+            </aside>
+        `;
+    }
+
+    function renderLifeMapSummaries() {
+        const pointBox = document.getElementById("lifeMapPointSummary");
+        const routeBox = document.getElementById("lifeMapRouteSummary");
+        const points = sortSceneItems(getVisibleLifePoints()).slice(0, 8);
+        const routes = sortSceneItems(getVisibleLifeRoutes()).slice(0, 8);
+
+        if (pointBox) {
+            pointBox.innerHTML = points.length ? points.map(point => {
+                const routesForPoint = getMapPointRouteUsage(point.id);
+                return `
+                    <div class="life-summary-item ${Number(mapState.selectedLifePointId) === Number(point.id) ? "selected" : ""}">
+                        <div>
+                            <strong>地图点 #${Number(point.id)}：${escapeSceneHtml(point.name || "未命名地点")}</strong>
+                            <span>${escapeSceneHtml(point.lifeArea || inferLifeMapArea(point))} / ${escapeSceneHtml(point.address || "暂无地址")}</span>
+                            <span>${(point.lifeThemes || []).map(renderLifeThemeTag).join("")}</span>
+                        </div>
+                        <div class="life-summary-actions">
+                            <span>${point.target_type && point.target_id ? "已关联真实库 / 线索" : "未关联真实库 / 线索"}</span>
+                            <span>${routesForPoint.length > 0 ? `被 ${routesForPoint.length} 条路线使用` : "暂未被路线使用"}</span>
+                            <button class="small-button" type="button" onclick="selectLifeMapPoint(${Number(point.id)})">查看联动</button>
+                            <button class="small-button btn-secondary" type="button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">查看地图点详情</button>
+                        </div>
+                    </div>
+                `;
+            }).join("") : `<div class="scene-empty-state">当前主题暂无地点。</div>`;
+        }
+
+        if (routeBox) {
+            routeBox.innerHTML = routes.length ? routes.map(route => {
+                const pointItems = buildRoutePointItems(route);
+                const pointNames = pointItems.map(formatRoutePointLabel).filter(Boolean);
+                const endpoint = pointNames.length > 0 ? pointNames[pointNames.length - 1] : "待补充";
+                const routeAreas = getLifeRouteAreas(route);
+                return `
+                    <div class="life-summary-item ${Number(mapState.selectedLifeRouteId) === Number(route.id) ? "selected" : ""}">
+                        <div>
+                            <strong>路线 #${Number(route.id)}：${escapeSceneHtml(route.name || "未命名路线")}</strong>
+                            <span>适用场景：${(route.lifeThemes || []).map(renderLifeThemeTag).join("") || escapeSceneHtml(route.scene || "未匹配")}</span>
+                            <span>涉及区域：${escapeSceneHtml(routeAreas.join(" / ") || "待补全区域")}</span>
+                            <span>起点：${escapeSceneHtml(route.start_area || "待补充")} / 终点：${escapeSceneHtml(endpoint)}</span>
+                            <span>途经地图点：${escapeSceneHtml(pointNames.join(" -> ") || route.point_ids || "待补充")}</span>
+                        </div>
+                        <div class="life-summary-actions">
+                            <button class="small-button" type="button" onclick="selectLifeMapRoute(${Number(route.id)})">高亮路线点位</button>
+                            <button class="small-button btn-secondary" type="button" onclick="location.href='route-detail.html?id=${Number(route.id)}'">查看路线详情</button>
+                        </div>
+                    </div>
+                `;
+            }).join("") : `<div class="scene-empty-state">当前主题暂无路线。</div>`;
+        }
+    }
+
+    function renderLifeDetailPanel() {
+        const box = document.getElementById("lifeMapDetailPanel");
+        if (!box) {
+            return;
+        }
+        const route = getLifeRouteById(mapState.selectedLifeRouteId);
+        if (route) {
+            const pointItems = buildRoutePointItems(route);
+            const routeAreas = getLifeRouteAreas(route);
+            box.innerHTML = `
+                <h3>路线 #${Number(route.id)}：${escapeSceneHtml(route.name || "未命名路线")}</h3>
+                <div class="life-detail-tags">${(route.lifeThemes || []).map(renderLifeThemeTag).join("")}</div>
+                <p>${escapeSceneHtml(route.description || "暂无路线说明。")}</p>
+                <div class="life-detail-grid">
+                    <div><strong>适用场景</strong><span>${escapeSceneHtml((route.lifeThemes || []).join("、") || route.scene || "未匹配")}</span></div>
+                    <div><strong>涉及区域</strong><span>${escapeSceneHtml(routeAreas.join(" / ") || "待补全区域")}</span></div>
+                    <div><strong>起点</strong><span>${escapeSceneHtml(route.start_area || "待补充")}</span></div>
+                    <div><strong>途经地图点</strong><span>${escapeSceneHtml(pointItems.map(formatRoutePointLabel).join(" -> ") || route.point_ids || "待补充")}</span></div>
+                    <div><strong>来源</strong><span>${escapeSceneHtml(route.source || "未知来源")}</span></div>
+                </div>
+                <div class="life-detail-actions">
+                    <button class="small-button" type="button" onclick="location.href='route-detail.html?id=${Number(route.id)}'">查看路线详情</button>
+                </div>
+            `;
+            return;
+        }
+
+        const point = getLifePointById(mapState.selectedLifePointId);
+        if (point) {
+            const routes = getMapPointRouteUsage(point.id);
+            box.innerHTML = `
+                <h3>地图点 #${Number(point.id)}：${escapeSceneHtml(point.name || "未命名地点")}</h3>
+                <div class="life-detail-tags">${(point.lifeThemes || []).map(renderLifeThemeTag).join("")}</div>
+                <p>${escapeSceneHtml(point.description || "暂无地点说明。")}</p>
+                <div class="life-detail-grid">
+                    <div><strong>地址 / 区域</strong><span>${escapeSceneHtml(point.address || point.lifeArea || "暂无地址")}</span></div>
+                    <div><strong>来源</strong><span>${escapeSceneHtml(point.source || "未知来源")}</span></div>
+                    <div><strong>关联入口</strong><span>${escapeSceneHtml(buildSceneRelatedText(point))}</span></div>
+                    <div><strong>路线使用</strong><span>${mapState.routeLoadFailed ? "暂不可用" : `${routes.length} 条`}</span></div>
+                </div>
+                ${renderLifeRelatedRoutes(routes)}
+                <div class="life-detail-actions">
+                    ${buildSceneRelatedButton(point)}
+                    <button class="small-button" type="button" onclick="location.href='map-detail.html?id=${Number(point.id)}'">查看地图点详情</button>
+                </div>
+            `;
+            return;
+        }
+
+        box.innerHTML = `
+            <h3>地点 / 路线详情</h3>
+            <p>点击地图点位或下方路线，查看关联路线、真实库 / 线索入口和详情跳转。</p>
+        `;
+    }
+
+    function renderLifeRelatedRoutes(routes) {
+        if (mapState.routeLoadFailed) {
+            return `<div class="scene-empty-state">路线关联暂不可用，请确认后端已启动。</div>`;
+        }
+        if (!routes || routes.length === 0) {
+            return `<div class="scene-empty-state">该地点暂未被路线使用。</div>`;
+        }
+        return `
+            <div class="life-related-routes">
+                <strong>相关路线</strong>
+                ${routes.map(route => `
+                    <button class="small-button btn-secondary" type="button" onclick="selectLifeMapRoute(${Number(route.id)})">
+                        路线 #${Number(route.id)}：${escapeSceneHtml(route.name || "未命名路线")}
+                    </button>
+                `).join("")}
+            </div>
+        `;
+    }
+
+    function renderLifeMapSamples() {
+        const box = document.getElementById("lifeMapSamples");
+        if (!box) {
+            return;
+        }
+        box.innerHTML = lifeMapSamples.map(sample => `
+            <div class="life-sample-card">
+                <strong>${escapeSceneHtml(sample.area)}</strong>
+                <span>${escapeSceneHtml(sample.items.join(" / "))}</span>
+                <p>${escapeSceneHtml(sample.hint)}</p>
+                <div>
+                    <button class="small-button" type="button" onclick="showMapSceneModule('create')">去新增地点</button>
+                    <button class="small-button btn-secondary" type="button" onclick="location.href='route.html'">去新增路线</button>
+                </div>
+            </div>
+        `).join("");
+    }
+
+    function getVisibleLifePoints() {
+        if (mapState.lifeTheme === "全部地图") {
+            return mapState.points;
+        }
+        return mapState.points.filter(point => (point.lifeThemes || inferLifePointThemes(point)).includes(mapState.lifeTheme));
+    }
+
+    function getVisibleLifeRoutes() {
+        if (mapState.lifeTheme === "全部地图") {
+            return mapState.routes || [];
+        }
+        return (mapState.routes || []).filter(route => (route.lifeThemes || inferLifeRouteThemes(route)).includes(mapState.lifeTheme));
+    }
+
+    function inferLifePointThemes(point) {
+        return inferLifeThemesFromValues([
+            point.category,
+            point.map_type,
+            point.name,
+            point.address,
+            point.description,
+            point.source
+        ]);
+    }
+
+    function inferLifeRouteThemes(route) {
+        const pointText = (route.points || []).map(point => `${point.name || ""} ${point.category || ""} ${point.address || ""} ${point.description || ""}`).join(" ");
+        return inferLifeThemesFromValues([
+            route.category,
+            route.route_type,
+            route.name,
+            route.start_area,
+            route.description,
+            route.source,
+            pointText
+        ]);
+    }
+
+    function inferLifeThemesFromValues(values) {
+        const text = values.map(value => String(value || "")).join(" ").toLowerCase();
+        return lifeMapThemes
+            .filter(theme => theme.name !== "全部地图" && theme.keywords.some(keyword => text.includes(keyword.toLowerCase())))
+            .map(theme => theme.name);
+    }
+
+    function inferLifeMapArea(point) {
+        const text = [point.name, point.address, point.description, point.source].map(value => String(value || "")).join(" ");
+        if (hasLifeAreaKeyword(text, ["穗石", "穗石村", "穗石路", "穗石市场", "穗石生活区"])) return "穗石";
+        if (hasLifeAreaKeyword(text, ["南亭", "南亭村", "南亭渡口", "南亭商业街"])) return "南亭";
+        if (hasLifeAreaKeyword(text, ["贝岗", "贝岗村", "贝岗地铁"])) return "贝岗";
+        if (hasLifeAreaKeyword(text, ["北亭", "北亭村", "北亭广场", "北亭生活区"])) return "北亭";
+        if (hasLifeAreaKeyword(text, ["大学城北", "大学城北站", "北站"])) return "贝岗";
+        return LIFE_AREA_PENDING;
+    }
+
+    function hasLifeAreaKeyword(text, keywords) {
+        return keywords.some(keyword => text.includes(keyword));
+    }
+
+    function groupLifePointsByArea(points) {
+        const groups = new Map();
+        lifeMapAreas.forEach(area => groups.set(area, []));
+        points.forEach(point => {
+            const area = point.lifeArea || inferLifeMapArea(point);
+            if (groups.has(area)) {
+                groups.get(area).push(point);
+            }
+        });
+        return groups;
+    }
+
+    function countLifePointsByArea(points) {
+        const counts = {};
+        points.forEach(point => {
+            const area = point.lifeArea || inferLifeMapArea(point);
+            if (lifeMapAreas.includes(area)) {
+                counts[area] = (counts[area] || 0) + 1;
+            }
+        });
+        return counts;
+    }
+
+    function getPendingLifeAreaPoints(points) {
+        return points.filter(point => !lifeMapAreas.includes(point.lifeArea || inferLifeMapArea(point)));
+    }
+
+    function getLifeRoutesForArea(area) {
+        const areaPointIds = new Set(getVisibleLifePoints()
+            .filter(point => (point.lifeArea || inferLifeMapArea(point)) === area)
+            .map(point => Number(point.id))
+            .filter(Boolean));
+        return getVisibleLifeRoutes().filter(route => getLifeRoutePointIds(route).some(pointId => areaPointIds.has(Number(pointId))));
+    }
+
+    function getLifeTheme(name) {
+        return lifeMapThemes.find(theme => theme.name === name);
+    }
+
+    function renderLifeThemeTag(name) {
+        const theme = getLifeTheme(name) || lifeMapThemes[0];
+        return `<span class="life-theme-tag life-theme-${theme.className}">${escapeSceneHtml(name)}</span>`;
+    }
+
+    function getLifeAreaClass(area) {
+        const index = Math.max(lifeMapAreas.indexOf(area), 0);
+        return String(index + 1);
+    }
+
+    function getLifePointById(pointId) {
+        const id = Number(pointId);
+        return (mapState.points || []).find(point => Number(point.id) === id);
+    }
+
+    function getLifeRouteById(routeId) {
+        const id = Number(routeId);
+        return (mapState.routes || []).find(route => Number(route.id) === id);
+    }
+
+    function getLifeRoutePointIds(route) {
+        if (!route) {
+            return [];
+        }
+        return buildRoutePointItems(route).map(point => Number(point.id)).filter(Boolean);
+    }
+
+    function getLifeRouteAreas(route) {
+        const pointIds = new Set(getLifeRoutePointIds(route));
+        const areas = new Set();
+        (mapState.points || []).forEach(point => {
+            if (!pointIds.has(Number(point.id))) {
+                return;
+            }
+            const area = point.lifeArea || inferLifeMapArea(point);
+            if (lifeMapAreas.includes(area)) {
+                areas.add(area);
+            }
+        });
+        return Array.from(areas);
+    }
+
     function renderMapSceneView() {
         const box = document.getElementById("mapPointList");
         if (!box) {
@@ -352,6 +824,7 @@
 
         renderMapStats(mapState.points);
         renderMapOverviewPreview(mapState.points);
+        renderLifeMapEngine();
         renderMapDedupeView();
         updateMapFilterButtons();
 
@@ -421,19 +894,28 @@
             const response = await fetch(`${API_BASE_URL}/routes`);
             const data = await response.json();
             if (!response.ok) {
+                mapState.routes = [];
                 mapState.routeUsage = new Map();
                 mapState.routeLoadFailed = true;
+                renderLifeMapEngine();
                 renderMapDedupeView();
                 return;
             }
 
-            mapState.routeUsage = buildMapRouteUsage(data.data || []);
+            mapState.routes = (data.data || []).map(route => ({
+                ...route,
+                lifeThemes: inferLifeRouteThemes(route)
+            }));
+            mapState.routeUsage = buildMapRouteUsage(mapState.routes);
             mapState.routesLoaded = true;
             mapState.routeLoadFailed = false;
+            renderLifeMapEngine();
             renderMapDedupeView();
         } catch (error) {
+            mapState.routes = [];
             mapState.routeUsage = new Map();
             mapState.routeLoadFailed = true;
+            renderLifeMapEngine();
             renderMapDedupeView();
         }
     }
@@ -1444,7 +1926,7 @@
     }
 
     function initMapSceneTabs() {
-        initSceneTabs("map", "overview");
+        initSceneTabs("map", "life");
     }
 
     function initRouteSceneTabs() {
