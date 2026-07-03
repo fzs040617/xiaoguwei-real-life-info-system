@@ -44,6 +44,7 @@
 
     <nav class="workspace-module-tabs map-scene-tabs" aria-label="地图中心二级模块">
         <button class="workspace-module-tab active" type="button" data-map-scene-tab="life" aria-pressed="true">生活地图</button>
+        <button class="workspace-module-tab" type="button" data-map-scene-tab="samples" aria-pressed="false">四区样板库</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="overview" aria-pressed="false">场景总览</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="create" aria-pressed="false">新增地点</button>
         <button class="workspace-module-tab" type="button" data-map-scene-tab="list" aria-pressed="false">地点列表</button>
@@ -109,7 +110,71 @@
                 <h3>样板数据建议</h3>
                 <span>仅展示建议，不自动入库</span>
             </div>
+            <div class="life-map-section-actions">
+                <button class="small-button" type="button" onclick="showMapSceneModule('samples')">进入四区样板库</button>
+            </div>
             <div id="lifeMapSamples" class="life-sample-grid"></div>
+        </section>
+    </section>
+
+    <section class="life-sample-workbench" data-map-scene-module="samples" hidden aria-label="四区样板库">
+        <div class="life-map-head">
+            <div>
+                <h2>四区样板库</h2>
+                <p>围绕贝岗、穗石、南亭、北亭整理待核验的生活场景内容，可辅助录入地点和路线，不会自动写入数据库。</p>
+            </div>
+            <span>待人工核验</span>
+        </div>
+
+        <div class="sample-filter-panel">
+            <div>
+                <h3>区域筛选</h3>
+                <div id="sampleZoneFilters" class="sample-filter-row" aria-label="样板库区域筛选"></div>
+            </div>
+            <div>
+                <h3>主题筛选</h3>
+                <div id="sampleThemeFilters" class="sample-filter-row" aria-label="样板库主题筛选"></div>
+            </div>
+        </div>
+
+        <div id="sampleWorkbenchNotice" class="sample-workbench-notice" aria-live="polite">
+            样板项只是录入提示，不代表真实准确；请人工核验后再保存。
+        </div>
+
+        <div class="sample-workbench-grid">
+            <section class="sample-workbench-panel sample-point-panel">
+                <div class="life-map-section-title">
+                    <h3>样板地点建议</h3>
+                    <span id="samplePointCount">0 条</span>
+                </div>
+                <div id="samplePointList" class="sample-card-grid"></div>
+            </section>
+
+            <section class="sample-workbench-panel sample-route-panel">
+                <div class="life-map-section-title">
+                    <h3>样板路线建议</h3>
+                    <span id="sampleRouteCount">0 条</span>
+                </div>
+                <div id="sampleRouteList" class="sample-card-grid"></div>
+            </section>
+        </div>
+
+        <section class="sample-workbench-panel sample-draft-panel">
+            <div class="life-map-section-title">
+                <h3>路线草稿</h3>
+                <span>不自动入库</span>
+            </div>
+            <div id="sampleRouteDraftBox" class="sample-route-draft-box">
+                选择样板路线后，可复制草稿并打开路线中心人工录入。
+            </div>
+        </section>
+
+        <section class="sample-workbench-panel sample-pending-panel">
+            <div class="life-map-section-title">
+                <h3>待补全提示</h3>
+                <span>录入前检查</span>
+            </div>
+            <div id="samplePendingTips" class="sample-pending-tips"></div>
         </section>
     </section>
 

@@ -20,7 +20,11 @@
         lifeTheme: "全部地图",
         selectedLifePointId: null,
         selectedLifeRouteId: null,
-        highlightedLifePointIds: new Set()
+        highlightedLifePointIds: new Set(),
+        sampleZone: "全部",
+        sampleTheme: "全部主题",
+        selectedSampleRouteId: null,
+        sampleMessage: ""
     };
 
     const routeState = {
@@ -83,6 +87,41 @@
         {area: "北亭", items: ["租房", "快递", "校园服务", "夜间安全"], hint: "围绕北亭村、北亭广场、北亭生活区补充居住、取件、校园服务和晚归安全信息。"}
     ];
 
+    const sampleZones = ["全部", "贝岗", "穗石", "南亭", "北亭"];
+    const sampleThemes = ["全部主题", "美食", "citywalk", "租房", "交通", "快递", "医疗", "校园服务", "政务", "夜间安全"];
+    const sampleVerifyStatus = "待人工核验";
+
+    const lifeSamplePoints = [
+        createSamplePoint("P-BG-FOOD", "贝岗", "美食", "贝岗美食聚集点", "探店", "贝岗村或贝岗地铁周边", "用于记录贝岗周边可核验的吃饭、夜宵、糖水、简餐等地点类型。"),
+        createSamplePoint("P-BG-TRAFFIC", "贝岗", "交通", "贝岗地铁周边交通点", "地图", "大学城北站 / 贝岗地铁周边", "用于记录地铁口、公交接驳、通勤换乘、晚间返回等交通信息。"),
+        createSamplePoint("P-BG-RENT", "贝岗", "租房", "贝岗租房生活区", "租房", "贝岗生活区附近", "用于记录贝岗周边待核验的公寓、单间、合租、看房动线等信息。"),
+        createSamplePoint("P-BG-EXPRESS", "贝岗", "快递", "贝岗快递取件点", "生活服务", "贝岗村或贝岗生活区附近", "用于记录菜鸟驿站、快递点、寄件点等取件服务信息。"),
+        createSamplePoint("P-BG-SAFE", "贝岗", "夜间安全", "贝岗夜间通行提示点", "避坑纠错", "贝岗晚归路径附近", "用于记录照明、绕行、偏僻路段等需要人工核验的安全提示。"),
+        createSamplePoint("P-SS-RENT", "穗石", "租房", "穗石租房生活区", "租房", "穗石村 / 穗石路周边", "用于记录穗石待核验的租房、看房、居住配套和通勤提示。"),
+        createSamplePoint("P-SS-FOOD", "穗石", "美食", "穗石美食生活点", "探店", "穗石市场或穗石生活区附近", "用于记录穗石周边饭店、简餐、奶茶等待核验生活信息。"),
+        createSamplePoint("P-SS-EXPRESS", "穗石", "快递", "穗石快递取件点", "生活服务", "穗石生活区附近", "用于记录穗石快递、驿站、寄件服务等待核验地点。"),
+        createSamplePoint("P-SS-SERVICE", "穗石", "校园服务", "穗石生活服务点", "生活服务", "穗石村或穗石生活区附近", "用于记录打印、维修、生活服务等待核验服务点。"),
+        createSamplePoint("P-NT-FOOD", "南亭", "美食", "南亭美食生活区", "探店", "南亭村 / 南亭商业街附近", "用于记录南亭周边聚餐、简餐、饮品等待核验地点。"),
+        createSamplePoint("P-NT-WALK", "南亭", "citywalk", "南亭 citywalk 起点", "路线", "南亭渡口或南亭商业街附近", "用于记录南亭散步、打卡、周末路线起点等待核验信息。"),
+        createSamplePoint("P-NT-TRAFFIC", "南亭", "交通", "南亭交通换乘点", "地图", "南亭村或南亭商业街周边", "用于记录南亭公交、骑行接驳、换乘提示等交通信息。"),
+        createSamplePoint("P-NT-RENT", "南亭", "租房", "南亭租房生活区", "租房", "南亭村周边", "用于记录南亭待核验租房、居住配套和看房提醒。"),
+        createSamplePoint("P-BT-RENT", "北亭", "租房", "北亭租房生活区", "租房", "北亭村 / 北亭生活区附近", "用于记录北亭租房、看房、通勤和居住配套信息。"),
+        createSamplePoint("P-BT-EXPRESS", "北亭", "快递", "北亭快递取件点", "生活服务", "北亭生活区附近", "用于记录北亭快递、驿站、取件高峰等待核验信息。"),
+        createSamplePoint("P-BT-CAMPUS", "北亭", "校园服务", "北亭校园服务点", "生活服务", "北亭广场或北亭生活区附近", "用于记录校园服务、维修、打印、报到办事等待核验信息。"),
+        createSamplePoint("P-BT-SAFE", "北亭", "夜间安全", "北亭夜间安全提示点", "避坑纠错", "北亭晚归路径附近", "用于记录晚归照明、绕行、偏僻路段等待核验安全提示。")
+    ];
+
+    const lifeSampleRoutes = [
+        createSampleRoute("R-BG-TRAFFIC", "贝岗", "交通", "贝岗地铁到生活区路线", "大学城北站 / 贝岗地铁周边", "贝岗生活区", ["贝岗地铁周边交通点", "贝岗租房生活区"], "用于整理从地铁到贝岗生活区的接驳、通勤和晚间返回提示。"),
+        createSampleRoute("R-BG-FOOD", "贝岗", "美食", "贝岗美食短路线", "贝岗生活区入口", "贝岗美食聚集点", ["贝岗美食聚集点", "贝岗快递取件点"], "用于整理贝岗短距离觅食、夜宵和取件顺路信息。"),
+        createSampleRoute("R-SS-RENT", "穗石", "租房", "穗石租房看房路线", "穗石生活区", "穗石租房生活区", ["穗石租房生活区", "穗石生活服务点"], "用于整理穗石看房、居住配套和通勤观察路线。"),
+        createSampleRoute("R-SS-SERVICE", "穗石", "校园服务", "穗石生活服务路线", "穗石美食生活点", "穗石生活服务点", ["穗石美食生活点", "穗石快递取件点", "穗石生活服务点"], "用于整理穗石吃饭、取件、维修打印等生活服务串联路线。"),
+        createSampleRoute("R-NT-WALK", "南亭", "citywalk", "南亭美食 citywalk 路线", "南亭 citywalk 起点", "南亭美食生活区", ["南亭 citywalk 起点", "南亭美食生活区"], "用于整理南亭周末散步、打卡和美食串联路线。"),
+        createSampleRoute("R-NT-TRAFFIC", "南亭", "交通", "南亭交通接驳路线", "南亭交通换乘点", "南亭租房生活区", ["南亭交通换乘点", "南亭租房生活区"], "用于整理南亭交通换乘、骑行接驳和看房到达路线。"),
+        createSampleRoute("R-BT-EXPRESS", "北亭", "快递", "北亭快递取件路线", "北亭校园服务点", "北亭快递取件点", ["北亭校园服务点", "北亭快递取件点"], "用于整理北亭校园服务和取件顺路路线。"),
+        createSampleRoute("R-BT-SAFE", "北亭", "夜间安全", "北亭夜间安全绕行路线", "北亭生活区", "北亭夜间安全提示点", ["北亭租房生活区", "北亭夜间安全提示点"], "用于整理北亭晚归、照明、绕行和安全提醒路线。")
+    ];
+
     window.setLifeMapTheme = function (theme) {
         mapState.lifeTheme = theme || "全部地图";
         mapState.selectedLifePointId = null;
@@ -106,6 +145,74 @@
         mapState.selectedLifePointId = null;
         mapState.highlightedLifePointIds = new Set(getLifeRoutePointIds(route));
         renderLifeMapEngine();
+    };
+
+    window.setSampleZone = function (zone) {
+        mapState.sampleZone = zone || "全部";
+        mapState.sampleMessage = "";
+        renderLifeSampleWorkbench();
+    };
+
+    window.setSampleTheme = function (theme) {
+        mapState.sampleTheme = theme || "全部主题";
+        mapState.sampleMessage = "";
+        renderLifeSampleWorkbench();
+    };
+
+    window.fillMapPointFromSample = function (sampleId) {
+        const sample = getSamplePointById(sampleId);
+        if (!sample) {
+            return;
+        }
+        showMapSceneModule("create");
+        setInputValue("mapName", sample.name);
+        setSelectValue("mapCategory", sample.category || "生活服务");
+        setInputValue("mapAddress", `${sample.zone}：${sample.address_hint || ""}`);
+        setSelectValue("mapType", `${sample.theme}地图`);
+        setInputValue("mapSource", "四区样板库（待人工核验）");
+        setInputValue("mapDescription", buildSamplePointDraftText(sample));
+        mapState.sampleMessage = `已填入新增地点草稿：${sample.name}。请人工核验后再保存。`;
+        renderLifeSampleWorkbench();
+        showSceneTabNotice("mapSceneTabMessage", mapState.sampleMessage);
+        showSceneNotice("mapMessage", mapState.sampleMessage);
+    };
+
+    window.selectSampleRouteDraft = function (sampleId) {
+        const sample = getSampleRouteById(sampleId);
+        if (!sample) {
+            return;
+        }
+        mapState.selectedSampleRouteId = sample.id;
+        mapState.sampleMessage = `已生成路线草稿：${sample.name}。不会自动写入数据库。`;
+        renderLifeSampleWorkbench();
+    };
+
+    window.copySampleRouteDraft = async function (sampleId) {
+        const sample = getSampleRouteById(sampleId);
+        if (!sample) {
+            return;
+        }
+        const text = buildSampleRouteDraftText(sample);
+        const copied = await copySceneText(text);
+        mapState.selectedSampleRouteId = sample.id;
+        mapState.sampleMessage = copied ? "路线草稿已复制，可到路线中心人工录入。" : "复制失败，请手动选中路线草稿文本复制。";
+        renderLifeSampleWorkbench();
+    };
+
+    window.openRouteCenterWithSampleDraft = function (sampleId) {
+        const sample = getSampleRouteById(sampleId);
+        if (sample) {
+            try {
+                localStorage.setItem("lifeSceneRouteDraft", JSON.stringify({
+                    ...sample,
+                    draft_text: buildSampleRouteDraftText(sample),
+                    saved_at: new Date().toISOString()
+                }));
+            } catch (error) {
+                // Ignore storage errors; the visible draft remains available for copying.
+            }
+        }
+        location.href = "route.html";
     };
 
     window.setMapScene = function (scene) {
@@ -172,6 +279,7 @@
             renderMapSceneView();
         } catch (error) {
             box.innerHTML = `<div class="empty">地图点加载失败，请确认后端已启动。</div>`;
+            renderLifeSampleWorkbench();
             renderMapDedupeView();
         }
     };
@@ -295,6 +403,7 @@
     document.addEventListener("DOMContentLoaded", () => {
         initMapSceneTabs();
         initRouteSceneTabs();
+        renderLifeSampleWorkbench();
     });
 
     window.createMapPoint = async function () {
@@ -405,6 +514,7 @@
         renderLifeMapCanvas();
         renderLifeMapSummaries();
         renderLifeMapSamples();
+        renderLifeSampleWorkbench();
     }
 
     function renderLifeThemeFilters() {
@@ -463,6 +573,7 @@
                     <strong>当前主题暂无地图点</strong>
                     <span>可以切换到全部地图，或到“新增地点”录入真实生活地点。</span>
                     <button class="small-button" type="button" onclick="showMapSceneModule('create')">去新增地点</button>
+                    <button class="small-button btn-secondary" type="button" onclick="showMapSceneModule('samples')">进入四区样板库</button>
                 </div>
             `;
             renderLifeDetailPanel();
@@ -674,6 +785,270 @@
                 </div>
             </div>
         `).join("");
+    }
+
+    function renderLifeSampleWorkbench() {
+        renderSampleFilters("sampleZoneFilters", sampleZones, mapState.sampleZone, "setSampleZone");
+        renderSampleFilters("sampleThemeFilters", sampleThemes, mapState.sampleTheme, "setSampleTheme");
+        renderSamplePointList();
+        renderSampleRouteList();
+        renderSampleRouteDraft();
+        renderSamplePendingTips();
+        const notice = document.getElementById("sampleWorkbenchNotice");
+        if (notice) {
+            notice.textContent = mapState.sampleMessage || "样板项只是录入提示，不代表真实准确；请人工核验后再保存。";
+        }
+    }
+
+    function renderSampleFilters(containerId, values, activeValue, handlerName) {
+        const box = document.getElementById(containerId);
+        if (!box) {
+            return;
+        }
+        box.innerHTML = values.map(value => `
+            <button class="sample-filter-chip ${activeValue === value ? "active" : ""}" type="button" onclick="${handlerName}('${escapeSceneJs(value)}')">
+                ${escapeSceneHtml(value)}
+            </button>
+        `).join("");
+    }
+
+    function renderSamplePointList() {
+        const box = document.getElementById("samplePointList");
+        const countBox = document.getElementById("samplePointCount");
+        if (!box) {
+            return;
+        }
+        const points = getVisibleSamplePoints();
+        if (countBox) {
+            countBox.textContent = `${points.length} 条`;
+        }
+        box.innerHTML = points.length ? points.map(renderSamplePointCard).join("") : `<div class="scene-empty-state">当前筛选下暂无样板地点。</div>`;
+    }
+
+    function renderSampleRouteList() {
+        const box = document.getElementById("sampleRouteList");
+        const countBox = document.getElementById("sampleRouteCount");
+        if (!box) {
+            return;
+        }
+        const routes = getVisibleSampleRoutes();
+        if (countBox) {
+            countBox.textContent = `${routes.length} 条`;
+        }
+        box.innerHTML = routes.length ? routes.map(renderSampleRouteCard).join("") : `<div class="scene-empty-state">当前筛选下暂无样板路线。</div>`;
+    }
+
+    function renderSamplePointCard(sample) {
+        return `
+            <article class="sample-card sample-point-card">
+                <div class="sample-card-tags">
+                    <span class="sample-zone-tag">${escapeSceneHtml(sample.zone)}</span>
+                    <span class="sample-theme-tag">${escapeSceneHtml(sample.theme)}</span>
+                    <span class="sample-verify-tag">${escapeSceneHtml(sample.verify_status)}</span>
+                </div>
+                <h3>${escapeSceneHtml(sample.name)}</h3>
+                <div class="sample-card-meta">
+                    <span>分类：${escapeSceneHtml(sample.category)}</span>
+                    <span>地址提示：${escapeSceneHtml(sample.address_hint)}</span>
+                    <span>来源：${escapeSceneHtml(sample.source_note)}</span>
+                </div>
+                <p>${escapeSceneHtml(sample.description)}</p>
+                <div class="sample-card-actions">
+                    <button class="small-button" type="button" onclick="fillMapPointFromSample('${escapeSceneJs(sample.id)}')">填入新增地点草稿</button>
+                    <button class="small-button btn-secondary" type="button" onclick="copySamplePointDraft('${escapeSceneJs(sample.id)}')">复制草稿</button>
+                </div>
+            </article>
+        `;
+    }
+
+    function renderSampleRouteCard(sample) {
+        const selected = mapState.selectedSampleRouteId === sample.id;
+        return `
+            <article class="sample-card sample-route-card ${selected ? "selected" : ""}">
+                <div class="sample-card-tags">
+                    <span class="sample-zone-tag">${escapeSceneHtml(sample.zone)}</span>
+                    <span class="sample-theme-tag">${escapeSceneHtml(sample.theme)}</span>
+                    <span class="sample-verify-tag">${escapeSceneHtml(sample.verify_status)}</span>
+                </div>
+                <h3>${escapeSceneHtml(sample.name)}</h3>
+                <div class="sample-card-meta">
+                    <span>起点提示：${escapeSceneHtml(sample.start_hint)}</span>
+                    <span>终点提示：${escapeSceneHtml(sample.end_hint)}</span>
+                    <span>途经提示：${escapeSceneHtml(sample.point_hints.join(" -> "))}</span>
+                </div>
+                <p>${escapeSceneHtml(sample.description)}</p>
+                <div class="sample-card-actions">
+                    <button class="small-button" type="button" onclick="selectSampleRouteDraft('${escapeSceneJs(sample.id)}')">生成路线草稿</button>
+                    <button class="small-button btn-secondary" type="button" onclick="copySampleRouteDraft('${escapeSceneJs(sample.id)}')">复制路线草稿</button>
+                    <button class="small-button btn-secondary" type="button" onclick="openRouteCenterWithSampleDraft('${escapeSceneJs(sample.id)}')">打开路线中心</button>
+                </div>
+            </article>
+        `;
+    }
+
+    window.copySamplePointDraft = async function (sampleId) {
+        const sample = getSamplePointById(sampleId);
+        if (!sample) {
+            return;
+        }
+        const copied = await copySceneText(buildSamplePointDraftText(sample));
+        mapState.sampleMessage = copied ? "地点草稿已复制，可人工粘贴核验。" : "复制失败，请手动复制样板卡内容。";
+        renderLifeSampleWorkbench();
+    };
+
+    function renderSampleRouteDraft() {
+        const box = document.getElementById("sampleRouteDraftBox");
+        if (!box) {
+            return;
+        }
+        const sample = getSampleRouteById(mapState.selectedSampleRouteId);
+        if (!sample) {
+            box.innerHTML = "选择样板路线后，可复制草稿并打开路线中心人工录入。";
+            return;
+        }
+        box.innerHTML = `
+            <textarea class="sample-draft-textarea" readonly>${escapeSceneHtml(buildSampleRouteDraftText(sample))}</textarea>
+            <div class="sample-card-actions">
+                <button class="small-button" type="button" onclick="copySampleRouteDraft('${escapeSceneJs(sample.id)}')">复制路线草稿</button>
+                <button class="small-button btn-secondary" type="button" onclick="openRouteCenterWithSampleDraft('${escapeSceneJs(sample.id)}')">打开路线中心</button>
+            </div>
+        `;
+    }
+
+    function renderSamplePendingTips() {
+        const box = document.getElementById("samplePendingTips");
+        if (!box) {
+            return;
+        }
+        box.innerHTML = `
+            <div class="sample-tip-list">
+                <div>所有样板地点和路线均为“${escapeSceneHtml(sampleVerifyStatus)}”，只用于提示后续可录入的信息类型。</div>
+                <div>填入新增地点草稿不会自动提交，仍需人工确认名称、地址、分类、来源和说明。</div>
+                <div>路线草稿只提供复制和打开路线中心入口，不会自动创建路线，也不会修改 route.point_ids。</div>
+            </div>
+        `;
+    }
+
+    function getVisibleSamplePoints() {
+        return lifeSamplePoints.filter(sample => isSampleVisible(sample));
+    }
+
+    function getVisibleSampleRoutes() {
+        return lifeSampleRoutes.filter(sample => isSampleVisible(sample));
+    }
+
+    function isSampleVisible(sample) {
+        const zoneMatched = mapState.sampleZone === "全部" || sample.zone === mapState.sampleZone;
+        const themeMatched = mapState.sampleTheme === "全部主题" || sample.theme === mapState.sampleTheme;
+        return zoneMatched && themeMatched;
+    }
+
+    function createSamplePoint(id, zone, theme, name, category, addressHint, description) {
+        return {
+            id,
+            zone,
+            theme,
+            name,
+            category,
+            address_hint: addressHint,
+            description,
+            source_note: "四区样板库（待人工核验）",
+            verify_status: sampleVerifyStatus
+        };
+    }
+
+    function createSampleRoute(id, zone, theme, name, startHint, endHint, pointHints, description) {
+        return {
+            id,
+            zone,
+            theme,
+            name,
+            start_hint: startHint,
+            end_hint: endHint,
+            point_hints: pointHints,
+            description,
+            source_note: "四区样板库（待人工核验）",
+            verify_status: sampleVerifyStatus
+        };
+    }
+
+    function getSamplePointById(sampleId) {
+        return lifeSamplePoints.find(sample => sample.id === sampleId);
+    }
+
+    function getSampleRouteById(sampleId) {
+        return lifeSampleRoutes.find(sample => sample.id === sampleId);
+    }
+
+    function buildSamplePointDraftText(sample) {
+        return [
+            `区域：${sample.zone}`,
+            `主题：${sample.theme}`,
+            `核验状态：${sample.verify_status}`,
+            `地址提示：${sample.address_hint}`,
+            `说明：${sample.description}`,
+            `来源说明：${sample.source_note}`,
+            "注意：该样板项不是已核实真实地点，请人工核验后再保存。"
+        ].join("\n");
+    }
+
+    function buildSampleRouteDraftText(sample) {
+        return [
+            `路线名称：${sample.name}`,
+            `区域：${sample.zone}`,
+            `主题：${sample.theme}`,
+            `核验状态：${sample.verify_status}`,
+            `起点提示：${sample.start_hint}`,
+            `终点提示：${sample.end_hint}`,
+            `途经提示：${sample.point_hints.join(" -> ")}`,
+            `说明：${sample.description}`,
+            `来源说明：${sample.source_note}`,
+            "注意：该样板路线不是已核实真实路线，请人工核验后再录入路线中心。"
+        ].join("\n");
+    }
+
+    async function copySceneText(text) {
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+                return true;
+            }
+        } catch (error) {
+            // Fall back to the textarea method below.
+        }
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "readonly");
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        let copied = false;
+        try {
+            copied = document.execCommand && document.execCommand("copy");
+        } catch (error) {
+            copied = false;
+        }
+        document.body.removeChild(textarea);
+        return copied;
+    }
+
+    function setInputValue(id, value) {
+        const element = document.getElementById(id);
+        if (element) {
+            element.value = value || "";
+        }
+    }
+
+    function setSelectValue(id, value) {
+        const element = document.getElementById(id);
+        if (!element) {
+            return;
+        }
+        const option = Array.from(element.options || []).find(item => item.value === value || item.textContent.trim() === value);
+        if (option) {
+            element.value = option.value;
+        }
     }
 
     function getVisibleLifePoints() {
