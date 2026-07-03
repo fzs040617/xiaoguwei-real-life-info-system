@@ -18,6 +18,7 @@
         pendingCreatedId: null,
         pendingFallback: false,
         lifeTheme: "全部地图",
+        lifeSearchKeyword: "",
         selectedLifePointId: null,
         selectedLifeRouteId: null,
         highlightedLifePointIds: new Set(),
@@ -128,6 +129,33 @@
         mapState.selectedLifeRouteId = null;
         mapState.highlightedLifePointIds = new Set();
         renderLifeMapEngine();
+    };
+
+    window.setLifeMapKeyword = function (keyword) {
+        mapState.lifeSearchKeyword = String(keyword || "").trim();
+        mapState.selectedLifePointId = null;
+        mapState.selectedLifeRouteId = null;
+        mapState.highlightedLifePointIds = new Set();
+        renderLifeMapEngine();
+    };
+
+    window.clearLifeMapKeyword = function () {
+        mapState.lifeSearchKeyword = "";
+        const input = document.getElementById("lifeMapKeyword");
+        if (input) {
+            input.value = "";
+            input.focus();
+        }
+        mapState.selectedLifePointId = null;
+        mapState.selectedLifeRouteId = null;
+        mapState.highlightedLifePointIds = new Set();
+        renderLifeMapEngine();
+    };
+
+    window.handleLifeMapSearchKeyDown = function (event) {
+        if (event && event.key === "Enter") {
+            event.preventDefault();
+        }
     };
 
     window.selectLifeMapPoint = function (pointId) {
@@ -510,6 +538,7 @@
 
     function renderLifeMapEngine() {
         renderLifeThemeFilters();
+        renderLifeSearchSummary();
         renderLifeThemeSummary();
         renderLifeMapCanvas();
         renderLifeMapSummaries();
@@ -527,6 +556,19 @@
                 ${escapeSceneHtml(theme.name)}
             </button>
         `).join("");
+    }
+
+    function renderLifeSearchSummary() {
+        const box = document.getElementById("lifeMapSearchSummary");
+        if (!box) {
+            return;
+        }
+        const keyword = getLifeSearchKeyword();
+        const points = getVisibleLifePoints();
+        const routes = getVisibleLifeRoutes();
+        box.textContent = keyword
+            ? `当前搜索结果：${points.length} 个地点 / ${routes.length} 条路线`
+            : `当前匹配：${points.length} 个地点 / ${routes.length} 条路线`;
     }
 
     function renderLifeThemeSummary() {
@@ -568,12 +610,21 @@
 
         const points = getVisibleLifePoints();
         if (points.length === 0) {
+            const searchKeyword = getLifeSearchKeyword();
+            const routeCount = getVisibleLifeRoutes().length;
+            const emptyTitle = searchKeyword && routeCount === 0 ? "暂无匹配地点或路线" : "当前主题暂无地图点";
+            const emptyText = searchKeyword
+                ? (routeCount > 0 ? "暂无匹配地点，匹配路线可在下方路线列表查看。" : "暂无匹配地点或路线，请换个关键词试试。")
+                : "可以切换到全部地图，或到“新增地点”录入真实生活地点。";
             box.innerHTML = `
                 <div class="life-map-empty">
-                    <strong>当前主题暂无地图点</strong>
-                    <span>可以切换到全部地图，或到“新增地点”录入真实生活地点。</span>
-                    <button class="small-button" type="button" onclick="showMapSceneModule('create')">去新增地点</button>
-                    <button class="small-button btn-secondary" type="button" onclick="showMapSceneModule('samples')">进入四区样板库</button>
+                    <strong>${escapeSceneHtml(emptyTitle)}</strong>
+                    <span>${escapeSceneHtml(emptyText)}</span>
+                    ${searchKeyword
+                        ? `<button class="small-button btn-secondary" type="button" onclick="clearLifeMapKeyword()">清空搜索</button>`
+                        : `<button class="small-button" type="button" onclick="showMapSceneModule('create')">去新增地点</button>
+                           <button class="small-button btn-secondary" type="button" onclick="showMapSceneModule('samples')">进入四区样板库</button>`
+                    }
                 </div>
             `;
             renderLifeDetailPanel();
@@ -667,7 +718,7 @@
                         </div>
                     </div>
                 `;
-            }).join("") : `<div class="scene-empty-state">当前主题暂无地点。</div>`;
+            }).join("") : `<div class="scene-empty-state">${getLifeSearchKeyword() ? "暂无匹配地点，请换个关键词试试。" : "当前主题暂无地点。"}</div>`;
         }
 
         if (routeBox) {
@@ -691,7 +742,7 @@
                         </div>
                     </div>
                 `;
-            }).join("") : `<div class="scene-empty-state">当前主题暂无路线。</div>`;
+            }).join("") : `<div class="scene-empty-state">${getLifeSearchKeyword() ? "暂无匹配路线，请换个关键词试试。" : "当前主题暂无路线。"}</div>`;
         }
     }
 
@@ -1052,17 +1103,110 @@
     }
 
     function getVisibleLifePoints() {
+        const points = getThemeFilteredLifePoints();
+        const keyword = getLifeSearchKeyword();
+        if (!keyword) {
+            return points;
+        }
+        return points.filter(point => doesLifePointMatchSearch(point, keyword));
+    }
+
+    function getVisibleLifeRoutes() {
+        const routes = getThemeFilteredLifeRoutes();
+        const keyword = getLifeSearchKeyword();
+        if (!keyword) {
+            return routes;
+        }
+        return routes.filter(route => doesLifeRouteMatchSearch(route, keyword));
+    }
+
+    function getThemeFilteredLifePoints() {
         if (mapState.lifeTheme === "全部地图") {
             return mapState.points;
         }
         return mapState.points.filter(point => (point.lifeThemes || inferLifePointThemes(point)).includes(mapState.lifeTheme));
     }
 
-    function getVisibleLifeRoutes() {
+    function getThemeFilteredLifeRoutes() {
         if (mapState.lifeTheme === "全部地图") {
             return mapState.routes || [];
         }
         return (mapState.routes || []).filter(route => (route.lifeThemes || inferLifeRouteThemes(route)).includes(mapState.lifeTheme));
+    }
+
+    function getLifeSearchKeyword() {
+        return String(mapState.lifeSearchKeyword || "").trim().toLowerCase();
+    }
+
+    function doesLifePointMatchSearch(point, keyword) {
+        return buildLifeSearchText([
+            point.id,
+            point.name,
+            point.address,
+            point.category,
+            point.map_type,
+            point.description,
+            point.source,
+            point.tags,
+            point.zone,
+            point.area,
+            point.lifeArea || inferLifeMapArea(point),
+            ...(point.lifeThemes || inferLifePointThemes(point))
+        ]).includes(keyword);
+    }
+
+    function doesLifeRouteMatchSearch(route, keyword) {
+        return buildLifeSearchText([
+            route.id,
+            route.name,
+            route.title,
+            route.description,
+            route.route_description,
+            route.category,
+            route.map_type,
+            route.route_type,
+            route.start_area,
+            route.source,
+            route.tags,
+            route.zone,
+            route.area,
+            route.point_ids,
+            route.scene,
+            ...(route.lifeThemes || inferLifeRouteThemes(route)),
+            ...getLifeRouteAreas(route),
+            ...buildRoutePointItems(route).flatMap(point => [
+                point.id,
+                point.name,
+                point.category,
+                point.address,
+                point.description,
+                point.source
+            ]),
+            ...getLifeRouteMappedPoints(route).flatMap(point => [
+                point.name,
+                point.category,
+                point.address,
+                point.description,
+                point.source,
+                point.lifeArea || inferLifeMapArea(point)
+            ])
+        ]).includes(keyword);
+    }
+
+    function buildLifeSearchText(values) {
+        return values
+            .flatMap(value => Array.isArray(value) ? value : [value])
+            .map(value => String(value || ""))
+            .join(" ")
+            .toLowerCase();
+    }
+
+    function getLifeRouteMappedPoints(route) {
+        const ids = new Set([
+            ...buildRoutePointItems(route).map(point => Number(point.id)).filter(Boolean),
+            ...parseRoutePointIds(route && route.point_ids)
+        ]);
+        return (mapState.points || []).filter(point => ids.has(Number(point.id)));
     }
 
     function inferLifePointThemes(point) {

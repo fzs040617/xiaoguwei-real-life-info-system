@@ -1599,6 +1599,49 @@ tr:hover td {
     color: #ffffff;
 }
 
+.life-map-search-panel {
+    display: grid;
+    gap: 8px;
+    border: 1px solid rgba(52, 72, 94, 0.14);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 10px 24px rgba(35, 45, 58, 0.06);
+    padding: 12px;
+}
+
+.life-map-search-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.life-map-search-input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 1px solid rgba(70, 96, 128, 0.18);
+    border-radius: 8px;
+    background: #ffffff;
+    color: #203044;
+    font-size: 14px;
+    line-height: 1.4;
+    padding: 10px 12px;
+}
+
+.life-map-search-input:focus {
+    border-color: #2f6fed;
+    box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.12);
+    outline: none;
+}
+
+.life-map-search-summary {
+    color: #637083;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.5;
+}
+
 .life-map-layout {
     display: grid;
     grid-template-columns: minmax(190px, 0.8fr) minmax(420px, 2.1fr) minmax(240px, 1fr);
@@ -5896,6 +5939,10 @@ button:hover,
 
     .life-map-sidebar,
     .life-map-canvas {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .life-map-search-row {
         grid-template-columns: minmax(0, 1fr);
     }
 

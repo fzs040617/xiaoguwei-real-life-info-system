@@ -63,6 +63,13 @@
         </div>
 
         <div id="lifeMapThemeFilters" class="life-theme-filters" aria-label="主题地图筛选"></div>
+        <div class="life-map-search-panel" role="search" aria-label="生活地图关键词搜索">
+            <div class="life-map-search-row">
+                <input id="lifeMapKeyword" class="life-map-search-input" placeholder="搜索地点、路线、区域、主题、关键词" oninput="setLifeMapKeyword(this.value)" onkeydown="handleLifeMapSearchKeyDown(event)">
+                <button class="small-button btn-secondary" type="button" onclick="clearLifeMapKeyword()">清空</button>
+            </div>
+            <div id="lifeMapSearchSummary" class="life-map-search-summary" aria-live="polite">当前匹配：全部地点 / 全部路线</div>
+        </div>
 
         <div class="life-map-layout">
             <aside class="life-map-sidebar">
