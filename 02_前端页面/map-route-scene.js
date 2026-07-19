@@ -240,7 +240,7 @@
                 // Ignore storage errors; the visible draft remains available for copying.
             }
         }
-        location.href = "route.html";
+        openRelativePage("route.html");
     };
 
     window.setMapScene = function (scene) {
@@ -1082,6 +1082,15 @@
         }
         document.body.removeChild(textarea);
         return copied;
+    }
+
+    function openRelativePage(url) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.style.display = "none";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     function setInputValue(id, value) {

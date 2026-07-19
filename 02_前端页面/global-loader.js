@@ -4,11 +4,12 @@
 // 新增全局功能时，只改这个文件，不再逐个修改全部 HTML。
 
 (function () {
-    const GLOBAL_SCRIPT_VERSION = "62";
+    const GLOBAL_SCRIPT_VERSION = "63";
 
     forceInitialPageTop();
 
     const globalScripts = [
+        "site-polish.js",
         "page-scope-cleanup.js",
         "user-widget.js",
         "user-widget-v2.js",

@@ -212,6 +212,10 @@
         const buttons = Array.from(document.querySelectorAll("button, a"));
 
         buttons.forEach(el => {
+            if (el.classList.contains("xgw-brand")) {
+                return;
+            }
+
             const text = (el.innerText || "").trim();
             const targetText = getElementTargetText(el);
 

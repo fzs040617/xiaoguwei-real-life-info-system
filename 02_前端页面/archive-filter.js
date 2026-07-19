@@ -11,14 +11,14 @@ function isArchivedVerifiedItem(item) {
 }
 
 async function loadHomeData() {
+    const verifiedBox = document.getElementById("verifiedResults");
+    const clueBox = document.getElementById("clueResults");
+
+    if (!verifiedBox || !clueBox) {
+        return;
+    }
+
     try {
-        const verifiedBox = document.getElementById("verifiedResults");
-        const clueBox = document.getElementById("clueResults");
-
-        if (!verifiedBox || !clueBox) {
-            return;
-        }
-
         const verifiedResponse = await fetch(`${API_BASE}/verified-items`);
         const verifiedData = await verifiedResponse.json();
 
@@ -31,8 +31,12 @@ async function loadHomeData() {
         renderVerified(currentVerifiedItems);
         renderClues(currentClues);
     } catch (error) {
-        document.getElementById("verifiedResults").innerHTML = `<div class="empty">加载失败，请确认后端已启动。</div>`;
-        document.getElementById("clueResults").innerHTML = `<div class="empty">加载失败，请确认后端已启动。</div>`;
+        if (!verifiedBox.isConnected || !clueBox.isConnected) {
+            return;
+        }
+
+        verifiedBox.innerHTML = `<div class="empty">加载失败，请确认后端已启动。</div>`;
+        clueBox.innerHTML = `<div class="empty">加载失败，请确认后端已启动。</div>`;
     }
 }
 

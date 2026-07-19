@@ -37,3 +37,6 @@ Thumbs.db
 .idea/tasks.xml
 .idea/usage.statistics.xml
 .idea/shelf/
+
+# Source illustration masters (optimized WebP files are committed instead)
+02_前端页面/assets/illustrations/professional/
